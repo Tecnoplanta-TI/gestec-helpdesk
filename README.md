@@ -1,6 +1,6 @@
 # Gestec Help Desk — Specs
 
-Repositório de **especificações** para módulos integrados ao Gestec existente (`C:\Users\julia.souza\Gestec`).
+Repositório de **especificações** para módulos integrados ao Gestec existente.
 
 > Referência técnica: [docs/referencia-gestec.md](docs/referencia-gestec.md)
 
