@@ -105,6 +105,28 @@ Cada decisão segue o padrão:
 | **Alternativas** | Módulo único |
 | **Consequências** | Numeração por pasta: `gestec.desk/01.x` e `help-desk/01.x` |
 
+### DEC-010 — Preset visual do Gestec Help Desk
+
+| Campo | Valor |
+|-------|-------|
+| **Status** | Definida e obrigatória na implementação |
+| **Data** | 2026-08-14 |
+| **Contexto** | Foi solicitado o preset shadcn `b2D0vQOME` como referência oficial, enquanto a documentação atual registra `new-york` + Lucide |
+| **Decisão** | Adotar o preset `b2D0vQOME` em todas as telas do `.pen` e obrigatoriamente no código. Na raiz do repositório executável Next.js, executar `npx shadcn@latest init --preset b2D0vQOME --template next`; a escolha do preset não está aberta a nova validação |
+| **Alternativas** | Manter integralmente `new-york`/Lucide; adotar apenas tokens compatíveis do preset |
+| **Consequências** | O `.pen` e o código usam a mesma referência Luma/neutral; a implementação deve reconciliar componentes existentes sem substituir o preset e sem criar configuração shadcn neste repositório documental |
+
+### DEC-011 — Processamento assíncrono com pg-boss e PostgreSQL
+
+| Campo | Valor |
+|-------|-------|
+| **Status** | Definida e obrigatória na implementação |
+| **Data** | 2026-08-27 |
+| **Contexto** | Notificações, relatórios e integrações assíncronas precisam de processamento persistente sem adicionar Redis à infraestrutura do Gestec Help Desk |
+| **Decisão** | Implementar **pg-boss sobre o PostgreSQL existente** para todos os jobs do Gestec Help Desk durante a fase de coding; esta escolha não está `TO_DEFINE` |
+| **Alternativas** | BullMQ + Redis; processamento somente em memória; serviço externo de filas |
+| **Consequências** | Elimina Redis e BullMQ do escopo do módulo; exige handlers idempotentes, observabilidade, controle de concorrência, política de retenção e migrations/configuração validadas no repositório executável |
+
 ### DEC-007 — Feriados no calendário de cobertura
 
 | Campo | Valor |
@@ -120,7 +142,6 @@ Cada decisão segue o padrão:
 
 ## Em aberto
 
-- [ ] Confirmar rota `/gestec-desk` para Desk (DEC-006)
 - [ ] Confirmar abordagem de feriados (DEC-007)
 - [ ] Permissões completas do Gestec Help Desk (`gestec_help_desk:*`)
 - [ ] Models Prisma para chamados/tickets (Help Desk)

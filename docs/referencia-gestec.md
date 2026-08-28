@@ -20,13 +20,16 @@ Cada módulo = item próprio em `sidebar-navigation.ts` + entradas no enum `Modu
 | Camada | Tecnologia |
 |--------|------------|
 | Frontend | Next.js 15 (App Router), React 19, TypeScript |
-| UI | Tailwind CSS 4, shadcn/ui (Radix, estilo "new-york"), Lucide icons |
+| UI herdada identificada | Tailwind CSS 4, shadcn/ui (Radix, estilo "new-york"), Lucide icons |
+| UI obrigatória dos módulos desta documentação | shadcn/ui com preset `b2D0vQOME`, inicializado por `npx shadcn@latest init --preset b2D0vQOME --template next` |
 | Formulários | React Hook Form + Zod |
 | Dados | TanStack Query 5 |
 | Backend | Next.js API Routes + Server Actions + Controllers |
 | Banco | PostgreSQL via Prisma 6 |
 | Auth | NextAuth.js 4 (Credentials + JWT) |
-| Jobs | BullMQ + Redis |
+| Jobs do Gestec Help Desk | pg-boss sobre PostgreSQL — decisão definida e implementação obrigatória na fase de coding |
+
+> Conforme a `DEC-011`, o Gestec Help Desk não deve introduzir Redis nem BullMQ para seus jobs. A fase de coding deve implementar pg-boss sobre PostgreSQL, adequando a configuração à arquitetura real do repositório executável sem reabrir a escolha tecnológica.
 
 ---
 

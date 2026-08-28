@@ -2,6 +2,8 @@
 
 Repositório de **especificações** para módulos integrados ao Gestec existente.
 
+> **Navegação principal:** [index.md](index.md)
+>
 > Referência técnica: [docs/referencia-gestec.md](docs/referencia-gestec.md)
 
 ## Módulos
@@ -22,6 +24,7 @@ gestec Help Desk/
 │  └─ help-desk/
 ├─ docs/
 ├─ src/
+├─ index.md
 └─ README.md
 ```
 
@@ -32,4 +35,4 @@ gestec Help Desk/
 3. **Você revisa:** corrige e complementa
 4. **Spec final:** entra em `gestec.desk/` ou `help-desk/`
 
-Mapa geral: [specs/00-visao-geral.md](specs/00-visao-geral.md)
+Mapa geral: [index.md](index.md)

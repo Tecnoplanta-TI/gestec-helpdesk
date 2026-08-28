@@ -7,6 +7,11 @@
 | **ID** | NN |
 | **Nome** | [Nome da Tela] |
 | **Status** | Rascunho / Em revisão / Aprovada |
+| **Epic** | [Epic funcional] |
+| **Prioridade** | P0 / P1 / P2 / P3 |
+| **Perfis envolvidos** | [atores] |
+| **Classificação** | CONFIRMED / INFERRED / PROPOSED |
+| **Origem** | Repositório / Docs / Spec / Figma / Legado / Inferência / Proposta |
 | **Última atualização** | YYYY-MM-DD |
 | **Referência Figma** | [link ou nome do frame] |
 
@@ -34,9 +39,30 @@ Descrever em 1–3 frases o que o usuário consegue fazer nesta tela e por quê 
 
 **Componente de proteção:** `<ProtectedRoute module={Modules.X} action={Actions.View}>`
 
+### User Story
+
+> Como [ator], quero [ação], para [objetivo].
+
+### Contexto
+
+Descrever o problema, a necessidade e o resultado de negócio.
+
+### Fluxo principal
+
+1. —
+2. —
+
+### Fluxos alternativos e exceções
+
+| Situação | Comportamento esperado |
+|----------|------------------------|
+| — | — |
+
 ---
 
 ## 3. Layout e componentes
+
+**Design system obrigatório:** shadcn/ui com preset `b2D0vQOME`. A implementação deve partir de `npx shadcn@latest init --preset b2D0vQOME --template next` no repositório executável Next.js. Não substituir o preset e não executar o comando neste repositório de Specs.
 
 ### 3.1 Estrutura visual
 
@@ -68,8 +94,8 @@ Descrever regiões da tela (header, sidebar, conteúdo principal, modais, etc.) 
 
 ## 6. Regras de negócio
 
-1. —
-2. —
+1. `BR-NN01` —
+2. `BR-NN02` —
 
 ---
 
@@ -104,20 +130,34 @@ Descrever regiões da tela (header, sidebar, conteúdo principal, modais, etc.) 
 
 ## 10. Critérios de aceite
 
+```gherkin
+Given [pré-condição]
+When [ação]
+Then [resultado observável]
+```
+
 - [ ] —
 - [ ] —
 - [ ] —
+
+## 11. Casos de borda e segurança
+
+- Concorrência / dupla submissão: —
+- Valores nulos, vazios e limites: —
+- Falha parcial / dependência indisponível: —
+- Autorização server-side / IDOR: —
+- Dados sensíveis, sanitização e auditoria: —
 
 ---
 
-## 11. Observações e pendências
+## 12. Observações e pendências
 
 - —
 - **TBD:** —
 
 ---
 
-## 12. Histórico de revisões
+## 13. Histórico de revisões
 
 | Data | Autor | Alteração |
 |------|-------|-----------|
