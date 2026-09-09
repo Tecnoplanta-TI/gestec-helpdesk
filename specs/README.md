@@ -24,6 +24,12 @@ Não é app separado. Cada spec descreve o que implementar **dentro do monorepo 
 
 Ver [referencia-gestec.md](../docs/referencia-gestec.md) e [padroes-ui.md](../docs/padroes-ui.md).
 
+## Visão do produto
+
+| Documento | Cobertura |
+|-----------|-----------|
+| [00 — Visão Geral da Solução Gestec Help Desk](help-desk/00-visao-geral-da-solucao.md) | Integra os três pilares do produto: registro de horas, gestão de tickets de suporte de TI e gestão de ativos de TI; referencia as Specs detalhadas e explicita as lacunas ainda pendentes |
+
 ---
 
 ## Referências no código Gestec

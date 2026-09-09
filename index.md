@@ -7,9 +7,11 @@ Este é o mapa principal do repositório de especificações dos módulos **Gest
 | Documento | Finalidade |
 |-----------|------------|
 | [Visão geral](specs/00-visao-geral.md) | Escopo dos módulos, rotas e mapa de telas |
+| [Visão da solução Gestec Help Desk](specs/help-desk/00-visao-geral-da-solucao.md) | Integra registro de horas, tickets de suporte e gestão de ativos sem duplicar as Specs funcionais |
 | [Inventário e rastreabilidade](docs/inventario-e-rastreabilidade.md) | Fontes analisadas, cobertura existente, legado e conflitos |
 | [Modelo de domínio](docs/modelo-de-dominio.md) | Entidades, campos, relacionamentos, enums e ownership |
 | [Stack tecnológica](docs/stack-tecnologica.md) | Tecnologias existentes, recomendadas e ainda por definir |
+| [Implementação local](docs/implementacao-local.md) | Execução, banco, autenticação delegada e substituição do simulador Zeev |
 | [Decisões técnicas](docs/decisoes-tecnicas.md) | Decisões arquiteturais vigentes e propostas |
 | [Padrões de UI](docs/padroes-ui.md) | Design system, componentes, acessibilidade e preset shadcn |
 | [Lacunas e ambiguidades](docs/lacunas-e-ambiguidades.md) | Decisões de produto e arquitetura ainda pendentes |
@@ -66,7 +68,7 @@ O módulo de inventário e auditoria possui índice próprio em [specs/gestec.de
 - Repositório atual e pasta `docs/`: analisados.
 - Specs existentes: inventariadas e preservadas.
 - Protótipo legado: analisado apenas como fonte secundária de descoberta.
-- Pencil oficial: inventário pré-edição registrado com 58 telas e 4 componentes. Após a retirada do escopo descontinuado e a atualização de Meu Tempo, `pencil-new.pen` contém 50 telas e 4 componentes reutilizáveis; as nove continuações de Meu Tempo estão organizadas lado a lado e validadas visual e estruturalmente em 2026-08-27.
-- Repositório executável: não acessível em 2026-08-26; cópias standalone legadas foram identificadas e deliberadamente não alteradas (GAP-003).
-- Preset shadcn `b2D0vQOME`: obrigatório no `.pen` e no coding. No repositório executável Next.js, inicializar com `npx shadcn@latest init --preset b2D0vQOME --template next`; não executar nesta pasta documental.
+- Pencil oficial: inventário pré-edição registrado com 58 telas e 4 componentes. Após a retirada do escopo descontinuado e a evolução para Jornada, `pencil-new.pen` contém 54 telas e 4 componentes reutilizáveis; as continuações de Jornada estão organizadas lado a lado e preservam como `VALIDAR` qualquer regra monetária ainda não aprovada.
+- Aplicação executável: inicializada na raiz deste repositório em 2026-09-02, preservando `docs/`, `specs/`, `index.md` e `pencil-new.pen`.
+- Preset shadcn `b2D0vQOME`: aplicado à aplicação Next.js e mantido como referência obrigatória do `.pen` e do código.
 - Figma: acesso estrutural pendente por ausência de URL/file key e sessão autenticada; ver [lacunas e ambiguidades](docs/lacunas-e-ambiguidades.md).

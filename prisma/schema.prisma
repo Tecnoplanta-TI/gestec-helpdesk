@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider          = "postgresql"
+  url               = env("DATABASE_URL")
+  shadowDatabaseUrl = env("SHADOW_DATABASE_URL")
+}
+
+enum UserRole {
+  ADMIN
+  TECHNICIAN
+  MANAGER
+  AUDITOR
+}
+
+enum TicketStatus {
+  NEW
+  TRIAGE
+  IN_PROGRESS
+  WAITING_REQUESTER
+  WAITING_APPROVAL
+  RESOLVED
+  CLOSED
+  REOPENED_LOW_SCORE
+  CANCELLED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TimeEntrySource {
+  TIMER
+  MANUAL
+  TICKET
+}
+
+enum TimeEntryStatus {
+  VALID
+  PENDING_CLASSIFICATION
+  VOIDED
+}
+
+enum ProjectKind {
+  COST_CENTER
+  MANUAL
+}
+
+enum AssetStatus {
+  IN_STOCK
+  IN_USE
+  MAINTENANCE
+  RETIRED
+}
+
+enum ParticipantRole {
+  PRIMARY
+  ADDITIONAL
+  OBSERVER
+}
+
+enum TicketAssetRelation {
+  CONTEXT
+  DELIVERED
+}
+
+enum SyncDirection {
+  INBOUND
+  OUTBOUND
+}
+
+enum SyncStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+model UserRef {
+  id         String   @id @db.Uuid
+  externalId String   @unique
+  name       String
+  email      String   @unique
+  role       UserRole
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  assignedTickets     Ticket[]            @relation("TicketAssignee")
+  requestedTickets    Ticket[]            @relation("TicketRequester")
+  comments            TicketComment[]
+  workPeriods         TicketWorkPeriod[]
+  timeEntries         TimeEntry[]
+  activeTimer         ActiveTimer?
+  auditEvents         AuditEvent[]
+  participations      TicketParticipant[]
+  addedParticipations TicketParticipant[] @relation("ParticipantAddedBy")
+  attachments         TicketAttachment[]
+  linkedAssets        TicketAsset[]
+}
+
+model CostCenter {
+  id             String   @id @default(uuid()) @db.Uuid
+  code           String   @unique
+  name           String
+  normalizedName String   @unique
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  tickets      Ticket[]
+  timeEntries  TimeEntry[]
+  activeTimers ActiveTimer[]
+
+  @@index([active, name])
+}
+
+model ServiceGroup {
+  id        String    @id @default(uuid()) @db.Uuid
+  code      String    @unique
+  name      String
+  active    Boolean   @default(true)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  services  Service[]
+
+  @@index([active, name])
+}
+
+model Service {
+  id        String       @id @default(uuid()) @db.Uuid
+  groupId   String       @db.Uuid
+  code      String
+  name      String
+  active    Boolean      @default(true)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  group     ServiceGroup @relation(fields: [groupId], references: [id], onDelete: Restrict)
+  tickets   Ticket[]
+
+  @@unique([groupId, code])
+  @@index([active, name])
+}
+
+model ManualProject {
+  id                String   @id @default(uuid()) @db.Uuid
+  name              String
+  normalizedName    String   @unique
+  color             String
+  availableToAll    Boolean  @default(true)
+  billableByDefault Boolean  @default(false)
+  active            Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  timeEntries  TimeEntry[]
+  activeTimers ActiveTimer[]
+
+  @@index([active, name])
+}
+
+model Ticket {
+  id                   String         @id @default(uuid()) @db.Uuid
+  number               Int            @unique @default(autoincrement())
+  externalReference    String         @unique
+  externalInstanceId   String?
+  externalInstanceUrl  String?
+  zeevTaskCode         String?
+  zeevAssignmentId     String?
+  title                String
+  description          String
+  requestType          String?
+  service              String?
+  serviceGroup         String?
+  applicationOrProcess String?
+  assetCode            String?
+  priority             TicketPriority @default(MEDIUM)
+  status               TicketStatus   @default(NEW)
+  requesterName        String
+  requesterExternalId  String?
+  requesterId          String?        @db.Uuid
+  assigneeId           String?        @db.Uuid
+  costCenterId         String?        @db.Uuid
+  catalogServiceId     String?        @db.Uuid
+  firstContactDeadline DateTime?
+  serviceDeadline      DateTime?
+  resolutionCycle      Int            @default(1)
+  resolutionSummary    String?
+  openedAt             DateTime
+  resolvedAt           DateTime?
+  closedAt             DateTime?
+  version              Int            @default(1)
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+
+  requester      UserRef?            @relation("TicketRequester", fields: [requesterId], references: [id], onDelete: SetNull)
+  assignee       UserRef?            @relation("TicketAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  costCenter     CostCenter?         @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  catalogService Service?            @relation(fields: [catalogServiceId], references: [id], onDelete: SetNull)
+  comments       TicketComment[]
+  workPeriods    TicketWorkPeriod[]
+  history        TicketHistory[]
+  timeEntries    TimeEntry[]
+  assets         TicketAsset[]
+  participants   TicketParticipant[]
+  attachments    TicketAttachment[]
+  evaluations    TicketEvaluation[]
+  syncExecutions SyncExecution[]
+
+  @@index([status, priority, openedAt])
+  @@index([assigneeId, status])
+  @@index([costCenterId])
+  @@index([requestType, status])
+}
+
+model TicketComment {
+  id         String   @id @default(uuid()) @db.Uuid
+  ticketId   String   @db.Uuid
+  authorId   String   @db.Uuid
+  body       String
+  internal   Boolean  @default(false)
+  requestKey String?  @unique
+  createdAt  DateTime @default(now())
+
+  ticket      Ticket             @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  author      UserRef            @relation(fields: [authorId], references: [id], onDelete: Restrict)
+  attachments TicketAttachment[]
+
+  @@index([ticketId, createdAt])
+}
+
+model TicketParticipant {
+  id        String          @id @default(uuid()) @db.Uuid
+  ticketId  String          @db.Uuid
+  userId    String          @db.Uuid
+  role      ParticipantRole
+  addedById String?         @db.Uuid
+  createdAt DateTime        @default(now())
+  removedAt DateTime?
+
+  ticket  Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user    UserRef  @relation(fields: [userId], references: [id], onDelete: Restrict)
+  addedBy UserRef? @relation("ParticipantAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+
+  @@index([ticketId, removedAt])
+  @@index([userId, removedAt])
+}
+
+model TicketAttachment {
+  id           String    @id @default(uuid()) @db.Uuid
+  ticketId     String    @db.Uuid
+  commentId    String?   @db.Uuid
+  storageKey   String    @unique
+  originalName String
+  mimeType     String
+  sizeBytes    Int
+  checksum     String
+  requestKey   String?   @unique
+  uploadedById String    @db.Uuid
+  createdAt    DateTime  @default(now())
+  deletedAt    DateTime?
+
+  ticket     Ticket         @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  comment    TicketComment? @relation(fields: [commentId], references: [id], onDelete: SetNull)
+  uploadedBy UserRef        @relation(fields: [uploadedById], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, deletedAt])
+}
+
+model TicketHistory {
+  id         String        @id @default(uuid()) @db.Uuid
+  ticketId   String        @db.Uuid
+  action     String
+  fromStatus TicketStatus?
+  toStatus   TicketStatus?
+  actorId    String?       @db.Uuid
+  details    Json?
+  createdAt  DateTime      @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@index([ticketId, createdAt])
+}
+
+model TicketWorkPeriod {
+  id              String    @id @default(uuid()) @db.Uuid
+  ticketId        String    @db.Uuid
+  userId          String    @db.Uuid
+  cycle           Int
+  startedAt       DateTime
+  endedAt         DateTime?
+  pausedAt        DateTime?
+  valid           Boolean   @default(true)
+  startRequestKey String?   @unique
+  stopRequestKey  String?   @unique
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  ticket Ticket  @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  user   UserRef @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([ticketId, userId, cycle])
+  @@index([userId, endedAt])
+}
+
+model TimeEntry {
+  id                   String          @id @default(uuid()) @db.Uuid
+  userId               String          @db.Uuid
+  ticketId             String?         @db.Uuid
+  costCenterId         String?         @db.Uuid
+  manualProjectId      String?         @db.Uuid
+  source               TimeEntrySource
+  status               TimeEntryStatus @default(VALID)
+  description          String
+  startedAt            DateTime
+  endedAt              DateTime
+  durationSeconds      Int
+  billable             Boolean         @default(false)
+  projectNameSnapshot  String?
+  ticketNumberSnapshot Int?
+  idempotencyKey       String?         @unique
+  timerStartRequestKey String?         @unique
+  timerStopRequestKey  String?         @unique
+  correctionReason     String?
+  version              Int             @default(1)
+  createdAt            DateTime        @default(now())
+  updatedAt            DateTime        @updatedAt
+
+  user          UserRef        @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ticket        Ticket?        @relation(fields: [ticketId], references: [id], onDelete: Restrict)
+  costCenter    CostCenter?    @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  manualProject ManualProject? @relation(fields: [manualProjectId], references: [id], onDelete: Restrict)
+
+  @@index([userId, startedAt])
+  @@index([costCenterId, startedAt])
+  @@index([manualProjectId, startedAt])
+  @@index([ticketId])
+}
+
+model ActiveTimer {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @db.Uuid
+  description     String
+  costCenterId    String?  @db.Uuid
+  manualProjectId String?  @db.Uuid
+  projectName     String
+  billable        Boolean  @default(false)
+  startedAt       DateTime @default(now())
+  requestKey      String   @unique
+  version         Int      @default(1)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          UserRef        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  costCenter    CostCenter?    @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+  manualProject ManualProject? @relation(fields: [manualProjectId], references: [id], onDelete: Restrict)
+
+  @@index([costCenterId])
+  @@index([manualProjectId])
+}
+
+model Asset {
+  id             String      @id @default(uuid()) @db.Uuid
+  assetTag       String      @unique
+  name           String
+  category       String
+  serialNumber   String?     @unique
+  status         AssetStatus @default(IN_STOCK)
+  assignedToName String?
+  notes          String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  tickets TicketAsset[]
+
+  @@index([status, category])
+}
+
+model TicketAsset {
+  ticketId     String              @db.Uuid
+  assetId      String              @db.Uuid
+  relationType TicketAssetRelation @default(CONTEXT)
+  linkedById   String?             @db.Uuid
+  createdAt    DateTime            @default(now())
+  removedAt    DateTime?
+
+  ticket   Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  asset    Asset    @relation(fields: [assetId], references: [id], onDelete: Restrict)
+  linkedBy UserRef? @relation(fields: [linkedById], references: [id], onDelete: SetNull)
+
+  @@id([ticketId, assetId])
+  @@index([ticketId, removedAt])
+}
+
+model TicketEvaluation {
+  id              String   @id @default(uuid()) @db.Uuid
+  ticketId        String   @db.Uuid
+  resolutionCycle Int
+  score           Int
+  justification   String?
+  expectationMet  Boolean?
+  comments        String?
+  externalId      String?  @unique
+  createdAt       DateTime @default(now())
+
+  ticket Ticket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@unique([ticketId, resolutionCycle])
+  @@index([ticketId, createdAt])
+}
+
+model SyncExecution {
+  id             String        @id @default(uuid()) @db.Uuid
+  ticketId       String?       @db.Uuid
+  idempotencyKey String        @unique
+  event          String
+  direction      SyncDirection
+  status         SyncStatus    @default(PENDING)
+  payload        Json
+  response       Json?
+  attempts       Int           @default(0)
+  lastError      String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String
+  before     Json?
+  after      Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  actor UserRef? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId, createdAt])
+}

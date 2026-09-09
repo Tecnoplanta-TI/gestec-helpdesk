@@ -5,7 +5,7 @@
 | Campo | Valor |
 |-------|-------|
 | **ID** | 15 |
-| **Nome** | Meu Tempo |
+| **Nome** | Jornada (ex-Meu Tempo) |
 | **Epic** | Produtividade, classificação de esforço e cobrança |
 | **Status** | Em revisão — fluxo funcional confirmado |
 | **Prioridade** | P1 |
@@ -17,7 +17,7 @@
 
 ## 1. Objetivo e limites
 
-Concentrar timer, lançamento manual, classificação por projeto, histórico, totais, correções e exportação em um único destino chamado **Meu Tempo**. **Apontamentos** permanece integrado a esse fluxo e não constitui página ou item separado da sidebar.
+Concentrar timer, lançamento manual, classificação por projeto, histórico, totais, correções e exportação em um único destino chamado **Jornada** (nome anterior: Meu Tempo). **Apontamentos** permanece integrado a esse fluxo e não constitui página ou item separado da sidebar.
 
 Os projetos desta Spec existem somente para classificar, medir, faturar, filtrar, exportar e relatar horas. Não existe recriação do antigo módulo genérico “Projetos e tarefas” nem uma página principal “Projetos”. O Clockify é referência apenas para composição da barra, alternância de modo e agrupamento visual; identidade, textos, navegação e componentes permanecem do Gestec com o preset shadcn `b2D0vQOME`.
 
@@ -212,7 +212,10 @@ A diferença entre origem automática e manual fica no detalhe e na auditoria, s
 - **Reiniciar semelhante** cria timer novo com dados reaproveitados e não altera o apontamento anterior; ticket não é copiado para a barra manual.
 - Filtros: período, projeto, centro de custo, projeto manual, ticket, usuário, status e faturável/não faturável.
 - Totais: hoje, semana, por projeto, por centro de custo, por projeto manual, faturável e não faturável.
-- Totais por centro de custo são base de horas para cobrança. Preço/hora, moeda, arredondamento, impostos e congelamento monetário permanecem `VALIDAR`.
+- Totais por centro de custo são base de horas para cobrança.
+- Preço/hora, moeda, arredondamento, impostos e congelamento monetário permanecem `VALIDAR`; até decisão, o sistema trabalha apenas com duração e indicação de faturabilidade.
+- A interface principal usa as boxes **Hoje** e **Meta** diária de 6h; o **Painel** mostra meta do mês, percentual e atividade da equipe. Gráficos ficam em backlog.
+- Listas de **Projetos** e **Equipe** ficam como continuações da Jornada, sem item próprio na sidebar principal.
 - Totais, relatórios e exportação reaplicam exatamente o mesmo período, timezone, filtros e escopo de autorização.
 
 ## 8. User Stories e regras de negócio
