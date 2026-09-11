@@ -10,6 +10,16 @@ import {
 
 const sections = [
   {
+    href: "/gestec_help_desk/admin/grupos",
+    title: "Grupos de usuários",
+    description: "Cadastre equipes para metas e notificações.",
+  },
+  {
+    href: "/gestec_help_desk/admin/metas",
+    title: "Metas de horas",
+    description: "Defina metas individuais ou por grupo de usuários.",
+  },
+  {
     href: "/gestec_help_desk/admin/usuarios",
     title: "Usuários",
     description: "Nome, e-mail, perfil e status local do UserRef.",
@@ -28,14 +38,14 @@ const sections = [
   },
   {
     href: "/gestec_help_desk/admin/projetos",
-    title: "Projetos",
+    title: "Projetos Semear",
     description:
-      "Edite o cadastro completo: nome, código, visibilidade, faturabilidade padrão e status.",
+      "Edite nome, visibilidade, faturabilidade, valor-hora, vigência e status.",
   },
   {
     href: "/gestec_help_desk/admin/centros-de-custo",
-    title: "Centros de custo",
-    description: "Código, nome e ativação dos projetos de origem Gestec.",
+    title: "Clientes",
+    description: "Código, nome e ativação dos clientes/centros de custo.",
   },
   {
     href: "/gestec_help_desk/admin/servicos",

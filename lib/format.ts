@@ -22,6 +22,14 @@ export function formatHoursMinutes(totalSeconds: number) {
   return `${String(hours).padStart(2, "0")}h ${String(minutes).padStart(2, "0")}m`;
 }
 
+export function formatCurrencyFromCents(value: number | null | undefined) {
+  if (value === null || value === undefined) return "Não informado";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value / 100);
+}
+
 export function formatClockMinutes(totalSeconds: number) {
   const seconds = Math.abs(Math.floor(totalSeconds));
   const hours = Math.floor(seconds / 3600);

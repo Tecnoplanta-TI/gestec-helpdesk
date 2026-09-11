@@ -43,35 +43,33 @@ Esta Spec é um contrato funcional e conceitual. Ela não define endpoints, tabe
 
 ### 3.1 Conceito apresentado ao usuário (`CONFIRMED`)
 
-Todo novo timer ou lançamento manual possui exatamente um **Projeto**. O seletor apresenta uma lista única com centros de custo ativos e projetos manuais ativos.
+Todo novo timer ou lançamento manual possui exatamente um **Projeto Semear**. Clientes/Centros de custo são cadastros independentes e não aparecem como opção de projeto novo.
 
 ```text
 Projeto
-├── Financeiro · CC-10027
-├── Recursos Humanos · CC-10031
-├── Operações · CC-10041
-├── Implantação SemeAR · SEM-009
+├── Implantação Semear · SEM-009
 └── Evolução da plataforma · SEM-014
 ```
 
-- Não exibir origem, tipo técnico, “Zeev”, “SemeAR” como badge, nem separar a lista por origem.
+- Não exibir origem ou tipo técnico como badge no seletor.
 - Grupos neutros permitidos: **Recentes** e **Todos os projetos**.
 - Quando nomes forem semelhantes, código ou identificador neutro pode desambiguar.
 - Cor de identificação não é usada para comunicar origem e nunca é o único identificador.
 
-### 3.2 Centro de custo disponibilizado como projeto (`CONFIRMED`)
+### 3.2 Cliente/Centro de custo separado do projeto (`CONFIRMED`)
 
 - O centro de custo é cadastrado e administrado no Gestec conforme a Spec 07.
-- Cada centro de custo ativo aparece automaticamente no seletor de Meu Tempo, sem cadastro duplicado.
-- O vínculo usa o identificador estável do centro de custo; renomear não cria outra opção nem quebra o histórico.
+- Cada centro de custo ativo é apresentado como Cliente em seu próprio cadastro, sem criar um Projeto Semear duplicado.
+- O vínculo histórico usa identificador estável; renomear não quebra a leitura de apontamentos anteriores.
 - Inativar impede novos usos, mas preserva apontamentos, relatórios, exportações e snapshots anteriores.
 - Centro de custo com apontamentos não pode ser excluído de forma destrutiva.
 - O dialog **Criar projeto** não cria nem edita centro de custo.
 
-### 3.3 Projeto manual (`CONFIRMED`)
+### 3.3 Projeto Semear (`CONFIRMED`)
 
-- É criado pelo dialog **Criar projeto**, principalmente para iniciativas SemeAR que não dependem de centro de custo.
-- Campos: nome, cor de identificação, disponível para todos quando permitido pelo RBAC, faturável por padrão e status ativo.
+- É criado pelo dialog **Criar projeto** para iniciativas do programa Semear.
+- Campos: nome, cor de identificação, disponível para todos quando permitido pelo RBAC, faturável por padrão, valor-hora e status ativo.
+- Uma alteração de valor-hora exige a data a partir da qual o novo valor vale; valores anteriores são preservados.
 - Somente usuário autorizado visualiza a ação de criação e pode editar, ativar ou arquivar.
 - Projeto manual arquivado não aparece em novos registros e permanece no histórico, relatórios e exportações.
 - Projeto com apontamento não é excluído fisicamente.

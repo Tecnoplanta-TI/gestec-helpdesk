@@ -11,10 +11,6 @@ export default async function JornadaProjetosPage() {
   const session = await requirePermission("time:view");
   const now = new Date();
   const canManage = hasPermission(session.role, "time:manage");
-  const canCreateCostCenter = hasPermission(
-    session.role,
-    "cost-centers:manage",
-  );
   const projects = await listProjectCatalog({
     includePrivateManual: canManage,
     includeInactive: canManage,
@@ -26,7 +22,6 @@ export default async function JornadaProjetosPage() {
     <ProjectList
       projects={projects}
       canManage={canManage}
-      canCreateCostCenter={canCreateCostCenter}
     />
   );
 }

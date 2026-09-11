@@ -4,6 +4,7 @@ import { ApiError } from "@/lib/http/api-error";
 import { auditSnapshot } from "@/lib/domain/audit";
 import { prisma } from "@/lib/prisma";
 import { getProject } from "@/lib/domain/projects";
+import { findProjectHourlyRateCents } from "@/lib/domain/project-rates";
 import { timerStopIdempotencyKey } from "@/lib/domain/time-query";
 
 export async function startTimer(input: {
@@ -276,6 +277,9 @@ export async function stopTimer(
         startedAt: timer.startedAt,
         endedAt,
         durationSeconds,
+        hourlyRateCentsSnapshot: timer.manualProjectId
+          ? await findProjectHourlyRateCents(tx, timer.manualProjectId, timer.startedAt)
+          : null,
         billable: timer.billable,
         projectNameSnapshot: timer.projectName,
         idempotencyKey: timerStopIdempotencyKey(timer.id),
@@ -353,6 +357,10 @@ export async function createManualTimeEntry(input: {
           startedAt: input.startedAt,
           endedAt: input.endedAt,
           durationSeconds,
+          hourlyRateCentsSnapshot:
+            project.kind === "MANUAL"
+              ? await findProjectHourlyRateCents(tx, project.id, input.startedAt)
+              : null,
           billable: input.billable,
           projectNameSnapshot: project.name,
           idempotencyKey: input.requestKey,

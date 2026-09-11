@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 
-import { CreateCostCenterDialog } from "@/components/admin/create-cost-center-dialog";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
 import { CreateProjectDialog } from "@/components/time/create-project-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -36,37 +35,36 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatHoursMinutes } from "@/lib/format";
+import { formatCurrencyFromCents, formatHoursMinutes } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
 import { Add01Icon, SearchIcon } from "@/lib/icons";
 
 export type ProjectListItem = {
   id: string;
-  kind: "cost-center" | "manual";
+  kind: "manual";
   name: string;
   code: string | null;
   color: string | null;
   availableToAll: boolean;
   active: boolean;
   billableByDefault: boolean;
+  hourlyRateCents: number | null;
+  hourlyRateEffectiveFrom: string | Date | null;
   monthSeconds: number;
 };
 
 export function ProjectList({
   projects,
   canManage,
-  canCreateCostCenter = false,
 }: {
   projects: ProjectListItem[];
   canManage: boolean;
-  canCreateCostCenter?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<ProjectListItem | null>(null);
   const [query, setQuery] = useState("");
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
-  const [createCostCenterOpen, setCreateCostCenterOpen] = useState(false);
   const [deleting, setDeleting] = useState<ProjectListItem | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -74,6 +72,8 @@ export function ProjectList({
     availableToAll: true,
     billableByDefault: false,
     active: true,
+    hourlyRate: "",
+    hourlyRateEffectiveFrom: new Date().toISOString().slice(0, 10),
   });
   const visibleProjects = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
@@ -86,7 +86,6 @@ export function ProjectList({
   }, [projects, query]);
 
   function openEditor(project: ProjectListItem) {
-    if (project.kind !== "manual") return;
     setEditing(project);
     setForm({
       name: project.name,
@@ -94,16 +93,26 @@ export function ProjectList({
       availableToAll: project.availableToAll,
       billableByDefault: project.billableByDefault,
       active: project.active,
+      hourlyRate: "",
+      hourlyRateEffectiveFrom: new Date().toISOString().slice(0, 10),
     });
   }
 
   function saveProject() {
-    if (!editing || editing.kind !== "manual") return;
+    if (!editing) return;
     startTransition(async () => {
       try {
         await apiRequest(
           `/api/v1/gestec-help-desk/projects/${editing.id.replace("manual:", "")}`,
-          { method: "PATCH", body: JSON.stringify(form) },
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              ...form,
+              ...(form.hourlyRate.trim()
+                ? { hourlyRate: Number(form.hourlyRate.replace(",", ".")) }
+                : { hourlyRate: undefined, hourlyRateEffectiveFrom: undefined }),
+            }),
+          },
         );
         toast.success(
           form.active
@@ -122,24 +131,17 @@ export function ProjectList({
     });
   }
 
-  function canDelete(project: ProjectListItem) {
-    return project.kind === "manual" ? canManage : canCreateCostCenter;
-  }
-
   function deleteTarget() {
     if (!deleting) return;
-    const isCostCenter = deleting.kind === "cost-center";
-    const id = deleting.id.replace(/^(manual:|cost-center:)/, "");
+    const id = deleting.id.replace("manual:", "");
     startTransition(async () => {
       try {
         await apiRequest(
-          isCostCenter
-            ? `/api/v1/gestec-help-desk/cost-centers/${id}`
-            : `/api/v1/gestec-help-desk/projects/${id}`,
+          `/api/v1/gestec-help-desk/projects/${id}`,
           { method: "DELETE" },
         );
         toast.success(
-          isCostCenter ? "Centro de custo excluído." : "Projeto excluído.",
+          "Projeto excluído.",
         );
         setDeleting(null);
         router.refresh();
@@ -157,21 +159,12 @@ export function ProjectList({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Projetos</h1>
           <p className="text-sm text-muted-foreground">
-            Centros de custo e projetos manuais usados para classificar as horas
-            da jornada.
+            Projetos do programa Semear usados para classificar as horas da
+            Jornada. Clientes são administrados separadamente.
           </p>
         </div>
         {canManage ? (
           <div className="flex flex-wrap gap-2">
-            {canCreateCostCenter ? (
-              <Button
-                variant="outline"
-                onClick={() => setCreateCostCenterOpen(true)}
-              >
-                <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
-                Criar centro de custo
-              </Button>
-            ) : null}
             <Button onClick={() => setCreateProjectOpen(true)}>
               <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
               Criar projeto
@@ -185,7 +178,7 @@ export function ProjectList({
           <EmptyHeader>
             <EmptyTitle>Nenhum projeto disponível</EmptyTitle>
             <EmptyDescription>
-              Crie um projeto manual na Jornada ou ative um centro de custo.
+              Crie um projeto Semear para começar.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -209,7 +202,7 @@ export function ProjectList({
               <TableHeader>
                 <TableRow>
                   <TableHead>Projeto</TableHead>
-                  <TableHead>Código</TableHead>
+                  <TableHead>Valor-hora</TableHead>
                   <TableHead>Horas no mês</TableHead>
                   <TableHead>Faturável por padrão</TableHead>
                   <TableHead>Status</TableHead>
@@ -226,7 +219,7 @@ export function ProjectList({
                         {project.name}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
-                        {project.code ?? "—"}
+                        {formatCurrencyFromCents(project.hourlyRateCents)}
                       </TableCell>
                       <TableCell className="tabular-nums">
                         {formatHoursMinutes(project.monthSeconds)}
@@ -244,24 +237,12 @@ export function ProjectList({
                       {canManage ? (
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {project.kind === "manual" ? (
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                onClick={() => openEditor(project)}
-                              >
-                                Editar
-                              </Button>
-                            ) : null}
-                            {canDelete(project) ? (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setDeleting(project)}
-                              >
-                                Excluir
-                              </Button>
-                            ) : null}
+                            <Button variant="outline" size="sm" onClick={() => openEditor(project)}>
+                              Editar
+                            </Button>
+                            <Button variant="ghost" size="sm" onClick={() => setDeleting(project)}>
+                              Excluir
+                            </Button>
                           </div>
                         </TableCell>
                       ) : null}
@@ -292,8 +273,11 @@ export function ProjectList({
         <SheetContent side="right" className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Editar projeto</SheetTitle>
-            <SheetDescription>
+          <SheetDescription>
               Altere os dados ou arquive o projeto sem apagar o histórico.
+              {editing?.hourlyRateCents !== null && editing?.hourlyRateCents !== undefined
+                ? ` Valor-hora atual: ${formatCurrencyFromCents(editing.hourlyRateCents)}.`
+                : " Nenhum valor-hora foi informado ainda."}
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-6">
@@ -311,6 +295,27 @@ export function ProjectList({
                   }
                 />
               </Field>
+              <Field>
+                <FieldLabel htmlFor="project-edit-hourly-rate">Novo valor-hora (R$)</FieldLabel>
+                <Input
+                  id="project-edit-hourly-rate"
+                  inputMode="decimal"
+                  value={form.hourlyRate}
+                  onChange={(event) => setForm((current) => ({ ...current, hourlyRate: event.target.value }))}
+                  placeholder="Deixe em branco para manter o valor atual"
+                />
+              </Field>
+              {form.hourlyRate.trim() ? (
+                <Field>
+                  <FieldLabel htmlFor="project-edit-rate-effective-from">Válido a partir de</FieldLabel>
+                  <Input
+                    id="project-edit-rate-effective-from"
+                    type="date"
+                    value={form.hourlyRateEffectiveFrom}
+                    onChange={(event) => setForm((current) => ({ ...current, hourlyRateEffectiveFrom: event.target.value }))}
+                  />
+                </Field>
+              ) : null}
               <Field>
                 <FieldLabel htmlFor="project-edit-color">
                   Cor de identificação
@@ -406,23 +411,14 @@ export function ProjectList({
           onCreated={() => router.refresh()}
         />
       ) : null}
-      {canCreateCostCenter ? (
-        <CreateCostCenterDialog
-          open={createCostCenterOpen}
-          onOpenChange={setCreateCostCenterOpen}
-          onCreated={() => router.refresh()}
-        />
-      ) : null}
       <ConfirmDeleteDialog
         open={Boolean(deleting)}
         title={
-          deleting?.kind === "cost-center"
-            ? "Excluir centro de custo"
-            : "Excluir projeto"
+          "Excluir projeto"
         }
         description={
           deleting
-            ? `Excluir “${deleting.name}”? Só é possível se não houver tickets, apontamentos ou timer ativo. Com histórico, inative para preservar os registros.`
+            ? `Excluir “${deleting.name}”? Só é possível se não houver apontamentos ou timer ativo. Com histórico, inative para preservar os registros.`
             : ""
         }
         pending={pending}

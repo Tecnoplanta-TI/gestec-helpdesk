@@ -16,7 +16,7 @@ export default async function TicketPage({
 }) {
   const session = await requirePermission("tickets:view");
   const { id } = await params;
-  const [ticket, costCenters, users, assets, services] = await Promise.all([
+  const [ticket, costCenters, users, assets, services, serviceGroups] = await Promise.all([
     prisma.ticket.findUnique({ where: { id }, include: ticketInclude }),
     prisma.costCenter.findMany({
       where: { active: true },
@@ -38,6 +38,11 @@ export default async function TicketPage({
       },
       orderBy: { name: "asc" },
     }),
+    prisma.serviceGroup.findMany({
+      where: { active: true },
+      select: { name: true },
+      orderBy: { name: "asc" },
+    }),
   ]);
   if (!ticket) notFound();
   return (
@@ -47,6 +52,7 @@ export default async function TicketPage({
       users={users}
       assets={assets}
       services={services}
+      serviceGroups={serviceGroups.map((group) => group.name)}
       currentUserId={session.userId}
       canManageTickets={hasPermission(session.role, "tickets:manage")}
     />

@@ -137,7 +137,7 @@ export function AdminTicketTable({
             <TableRow>
               <TableHead>Ticket</TableHead>
               <TableHead>Solicitante</TableHead>
-              <TableHead>Projeto</TableHead>
+              <TableHead>Centro de custo</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Prioridade</TableHead>
               <TableHead>Responsável</TableHead>
@@ -161,7 +161,8 @@ export function AdminTicketTable({
                     <Link
                       href={`/gestec_help_desk/admin/tickets/${ticket.id}`}
                       prefetch={false}
-                      className="font-medium hover:underline"
+                      className="block truncate font-medium hover:underline"
+                      title={`#${ticket.number} — ${ticket.title}`}
                     >
                       #{ticket.number} — {ticket.title}
                     </Link>
@@ -169,9 +170,9 @@ export function AdminTicketTable({
                       {ticket.externalReference}
                     </p>
                   </TableCell>
-                  <TableCell>{ticket.requesterName}</TableCell>
+                  <TableCell className="truncate" title={ticket.requesterName}>{ticket.requesterName}</TableCell>
                   <TableCell>
-                    {ticket.costCenter?.name ?? "Sem projeto"}
+                    {ticket.costCenter?.name ?? "Sem centro de custo"}
                   </TableCell>
                   <TableCell>
                     <Badge variant="secondary">

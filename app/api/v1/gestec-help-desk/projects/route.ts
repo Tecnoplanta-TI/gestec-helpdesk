@@ -3,7 +3,8 @@ import { requirePermission } from "@/lib/auth/session";
 import { auditSnapshot } from "@/lib/domain/audit";
 import { manualProjectSchema } from "@/lib/domain/schemas";
 import { listProjects, normalizeProjectName } from "@/lib/domain/projects";
-import { ApiError, errorResponse, readJson } from "@/lib/http/api-error";
+import { addProjectHourlyRate, centsFromCurrency } from "@/lib/domain/project-rates";
+import { errorResponse, readJson } from "@/lib/http/api-error";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
@@ -26,24 +27,18 @@ export async function POST(request: Request) {
     const input = manualProjectSchema.parse(await readJson(request));
     const normalizedName = normalizeProjectName(input.name);
     const project = await prisma.$transaction(async (tx) => {
-      const duplicateCostCenter = await tx.costCenter.findFirst({
-        where: {
-          OR: [
-            { normalizedName },
-            { name: { equals: input.name, mode: "insensitive" } },
-          ],
-        },
-        select: { id: true },
-      });
-      if (duplicateCostCenter)
-        throw new ApiError(
-          409,
-          "PROJECT_NAME_CONFLICT",
-          "Já existe um centro de custo com este nome.",
-        );
+      const { hourlyRate, hourlyRateEffectiveFrom, ...projectInput } = input;
       const created = await tx.manualProject.create({
-        data: { ...input, normalizedName },
+        data: { ...projectInput, normalizedName },
       });
+      if (hourlyRate !== undefined && hourlyRateEffectiveFrom) {
+        await addProjectHourlyRate(tx, {
+          manualProjectId: created.id,
+          amountCents: centsFromCurrency(hourlyRate),
+          effectiveFrom: hourlyRateEffectiveFrom,
+          createdById: session.userId,
+        });
+      }
       await tx.auditEvent.create({
         data: {
           actorId: session.userId,

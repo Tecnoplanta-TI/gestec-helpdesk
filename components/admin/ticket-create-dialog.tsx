@@ -220,7 +220,7 @@ export function AdminTicketCreateDialog({
               <SelectTrigger>
                 <SelectValue>
                   {(value) => {
-                    if (value === "none") return "Sem projeto";
+                    if (value === "none") return "Sem centro de custo";
                     const item = costCenters.find(
                       (center) => center.id === value,
                     );
@@ -231,7 +231,7 @@ export function AdminTicketCreateDialog({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="none">Sem projeto</SelectItem>
+                <SelectItem value="none">Sem centro de custo</SelectItem>
                 {costCenters.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     {item.code} — {item.name}

@@ -60,7 +60,7 @@ const navigation: Array<{
     href: "/gestec_help_desk/minha-caixa",
     label: "Minha Caixa",
     icon: InboxIcon,
-    permission: "tickets:view",
+    permission: "notifications:view",
     group: "Atendimento",
   },
   {

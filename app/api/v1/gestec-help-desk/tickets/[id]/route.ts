@@ -154,6 +154,14 @@ export async function PATCH(
         ...(input.requestType
           ? { requestType: normalizeRequestType(input.requestType) }
           : {}),
+        ...(input.serviceGroup !== undefined
+          ? { serviceGroup: input.serviceGroup }
+          : {}),
+        ...(input.service !== undefined ? { service: input.service } : {}),
+        ...(input.applicationOrProcess !== undefined
+          ? { applicationOrProcess: input.applicationOrProcess }
+          : {}),
+        ...(input.assetCode !== undefined ? { assetCode: input.assetCode } : {}),
         version: { increment: 1 },
       };
       const ticket = await tx.ticket.update({

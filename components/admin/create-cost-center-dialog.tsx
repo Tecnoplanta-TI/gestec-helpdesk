@@ -68,8 +68,8 @@ export function CreateCostCenterDialog({
         <DialogHeader>
           <DialogTitle>Criar centro de custo</DialogTitle>
           <DialogDescription>
-            O código precisa ser único. Centros ativos aparecem como projeto na
-            jornada.
+            O código precisa ser único. Centros de custo são usados nos
+            tickets; Projetos Semear são cadastrados separadamente.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>

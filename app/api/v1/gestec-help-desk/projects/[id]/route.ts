@@ -5,6 +5,7 @@ import {
   stripManualProjectId,
 } from "@/lib/domain/catalog-delete";
 import { normalizeProjectName } from "@/lib/domain/projects";
+import { addProjectHourlyRate, centsFromCurrency } from "@/lib/domain/project-rates";
 import { manualProjectUpdateSchema } from "@/lib/domain/schemas";
 import { ApiError, errorResponse, readJson } from "@/lib/http/api-error";
 import { prisma } from "@/lib/prisma";
@@ -25,27 +26,19 @@ export async function PATCH(
       const normalizedName = input.name
         ? normalizeProjectName(input.name)
         : undefined;
-      if (normalizedName) {
-        const duplicateCostCenter = await tx.costCenter.findFirst({
-          where: {
-            OR: [
-              { normalizedName },
-              { name: { equals: input.name, mode: "insensitive" } },
-            ],
-          },
-          select: { id: true },
-        });
-        if (duplicateCostCenter)
-          throw new ApiError(
-            409,
-            "PROJECT_NAME_CONFLICT",
-            "Já existe um centro de custo com este nome.",
-          );
-      }
+      const { hourlyRate, hourlyRateEffectiveFrom, ...projectInput } = input;
       const updated = await tx.manualProject.update({
         where: { id },
-        data: { ...input, ...(normalizedName ? { normalizedName } : {}) },
+        data: { ...projectInput, ...(normalizedName ? { normalizedName } : {}) },
       });
+      if (hourlyRate !== undefined && hourlyRateEffectiveFrom) {
+        await addProjectHourlyRate(tx, {
+          manualProjectId: id,
+          amountCents: centsFromCurrency(hourlyRate),
+          effectiveFrom: hourlyRateEffectiveFrom,
+          createdById: session.userId,
+        });
+      }
       await tx.auditEvent.create({
         data: {
           actorId: session.userId,

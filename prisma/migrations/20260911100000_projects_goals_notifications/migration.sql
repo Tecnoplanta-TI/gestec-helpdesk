@@ -1,13 +1,6 @@
--- Clientes continuam usando a tabela e as identidades estáveis de centros de
--- custo. Projetos passam a poder apontar para um cliente sem reclassificar os
--- lançamentos históricos que ainda referenciam diretamente um cliente.
-ALTER TABLE "ManualProject" ADD COLUMN "costCenterId" UUID;
-CREATE INDEX "ManualProject_costCenterId_active_name_idx"
-  ON "ManualProject"("costCenterId", "active", "name");
-ALTER TABLE "ManualProject"
-  ADD CONSTRAINT "ManualProject_costCenterId_fkey"
-  FOREIGN KEY ("costCenterId") REFERENCES "CostCenter"("id")
-  ON DELETE SET NULL ON UPDATE CASCADE;
+-- Cliente (centro de custo) e Projeto Semear são cadastros independentes.
+-- Não alteramos os vínculos históricos de apontamentos já associados a clientes.
+ALTER TABLE "TimeEntry" ADD COLUMN "hourlyRateCentsSnapshot" INTEGER;
 
 CREATE TABLE "ProjectHourlyRate" (
   "id" UUID NOT NULL,

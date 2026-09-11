@@ -260,7 +260,7 @@ export function TicketQueue({
               <TableHead className="w-[24rem]">Ticket</TableHead>
               <TableHead className="w-40">Solicitante</TableHead>
               <TableHead className="w-28">Tipo</TableHead>
-              <TableHead className="w-48">Projeto</TableHead>
+              <TableHead className="w-48">Centro de custo</TableHead>
               <TableHead className="w-28">Prioridade</TableHead>
               <TableHead className="w-36">Status</TableHead>
               <TableHead className="w-40">SLA</TableHead>

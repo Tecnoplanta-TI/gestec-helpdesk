@@ -37,7 +37,7 @@ export default async function KanbanPage() {
       serviceDeadline: true,
       assignee: { select: { name: true } },
     },
-    orderBy: [{ priority: "desc" }, { openedAt: "asc" }],
+    orderBy: { openedAt: "asc" },
   });
   const columns = kanbanColumns.map((column) => ({
     ...column,
@@ -76,10 +76,10 @@ export default async function KanbanPage() {
                       prefetch={false}
                       className="rounded-xl border bg-card p-3 shadow-sm transition hover:border-ring"
                     >
-                      <p className="font-medium">
+                      <p className="truncate font-medium" title={`#${ticket.number} — ${ticket.title}`}>
                         #{ticket.number} — {ticket.title}
                       </p>
-                      <p className="mt-1 text-sm text-muted-foreground">
+                      <p className="mt-1 truncate text-sm text-muted-foreground" title={ticket.requesterName}>
                         {ticket.requesterName}
                       </p>
                       <div className="mt-3 flex flex-wrap gap-2">

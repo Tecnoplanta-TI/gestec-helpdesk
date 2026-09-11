@@ -155,15 +155,16 @@ export function CostCenterManager({
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
-            Centros de custo
+            Clientes
           </h1>
           <p className="text-sm text-muted-foreground">
-            Centros ativos aparecem automaticamente como projetos na jornada.
+            Cadastre os clientes e seus centros de custo. Projetos Semear são
+            administrados separadamente.
           </p>
         </div>
         <Button onClick={startCreate}>
           <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} /> Novo
-          centro de custo
+          cliente
         </Button>
       </div>
 
@@ -228,7 +229,7 @@ export function CostCenterManager({
                       colSpan={4}
                       className="h-28 text-center text-muted-foreground"
                     >
-                      Nenhum centro de custo cadastrado.
+                      Nenhum cliente cadastrado.
                     </TableCell>
                   </TableRow>
                 )}
@@ -247,7 +248,7 @@ export function CostCenterManager({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editing ? "Editar centro de custo" : "Criar centro de custo"}
+              {editing ? "Editar cliente" : "Criar cliente"}
             </DialogTitle>
             <DialogDescription>
               O identificador interno permanece estável e o código não pode
@@ -288,7 +289,7 @@ export function CostCenterManager({
                 ? "Salvando…"
                 : editing
                   ? "Salvar alterações"
-                  : "Criar centro de custo"}
+                  : "Criar cliente"}
             </Button>
           </DialogFooter>
         </DialogContent>

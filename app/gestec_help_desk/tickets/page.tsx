@@ -45,7 +45,7 @@ export default async function TicketsPage({
         assignee: { select: { id: true, name: true } },
         costCenter: { select: { name: true } },
       },
-      orderBy: [{ priority: "desc" }, { openedAt: "desc" }],
+      orderBy: { openedAt: "asc" },
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize,
     }),

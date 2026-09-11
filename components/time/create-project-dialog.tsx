@@ -42,6 +42,10 @@ export function CreateProjectDialog({
   const [availableToAll, setAvailableToAll] = useState(true);
   const [billableByDefault, setBillableByDefault] = useState(false);
   const [active, setActive] = useState(true);
+  const [hourlyRate, setHourlyRate] = useState("");
+  const [hourlyRateEffectiveFrom, setHourlyRateEffectiveFrom] = useState(
+    () => new Date().toISOString().slice(0, 10),
+  );
   const dirty =
     name.trim().length > 0 ||
     color !== "#10b981" ||
@@ -55,6 +59,8 @@ export function CreateProjectDialog({
     setAvailableToAll(true);
     setBillableByDefault(false);
     setActive(true);
+    setHourlyRate("");
+    setHourlyRateEffectiveFrom(new Date().toISOString().slice(0, 10));
   }
 
   function handleOpenChange(next: boolean) {
@@ -81,6 +87,12 @@ export function CreateProjectDialog({
               availableToAll,
               billableByDefault,
               active,
+              ...(hourlyRate.trim()
+                ? {
+                    hourlyRate: Number(hourlyRate.replace(",", ".")),
+                    hourlyRateEffectiveFrom,
+                  }
+                : {}),
             }),
           },
         );
@@ -118,8 +130,8 @@ export function CreateProjectDialog({
         <DialogHeader>
           <DialogTitle>Criar projeto</DialogTitle>
           <DialogDescription>
-            Cadastre um projeto manual. Centros de custo continuam com código
-            próprio.
+            Cadastre um projeto do programa Semear. Clientes são mantidos em
+            um cadastro separado.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
@@ -133,6 +145,27 @@ export function CreateProjectDialog({
               aria-invalid={name.length > 0 && name.trim().length < 2}
             />
           </Field>
+          <Field>
+            <FieldLabel htmlFor="project-hourly-rate">Valor-hora (R$)</FieldLabel>
+            <Input
+              id="project-hourly-rate"
+              inputMode="decimal"
+              value={hourlyRate}
+              onChange={(event) => setHourlyRate(event.target.value)}
+              placeholder="Ex.: 150,00"
+            />
+          </Field>
+          {hourlyRate.trim() ? (
+            <Field>
+              <FieldLabel htmlFor="project-rate-effective-from">Válido a partir de</FieldLabel>
+              <Input
+                id="project-rate-effective-from"
+                type="date"
+                value={hourlyRateEffectiveFrom}
+                onChange={(event) => setHourlyRateEffectiveFrom(event.target.value)}
+              />
+            </Field>
+          ) : null}
           <Field>
             <FieldLabel htmlFor="project-color">
               Cor de identificação

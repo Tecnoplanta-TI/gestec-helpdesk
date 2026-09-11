@@ -107,6 +107,10 @@ export const ticketUpdateSchema = z
     costCenterId: uuid.nullable().optional(),
     catalogServiceId: uuid.nullable().optional(),
     requestType: z.string().trim().max(80).optional(),
+    service: z.string().trim().max(200).nullable().optional(),
+    serviceGroup: z.string().trim().max(200).nullable().optional(),
+    applicationOrProcess: z.string().trim().max(200).nullable().optional(),
+    assetCode: z.string().trim().max(80).nullable().optional(),
     resolutionSummary: z.string().trim().min(3).max(4000).optional(),
     reason: z.string().trim().min(3).max(500).optional(),
     version: z.number().int().positive(),
@@ -233,6 +237,12 @@ export const manualProjectSchema = z.object({
   availableToAll: z.boolean().default(true),
   billableByDefault: z.boolean().default(false),
   active: z.boolean().default(true),
+  hourlyRate: z.number().min(0).max(1_000_000).optional(),
+  hourlyRateEffectiveFrom: isoDateSchema.optional(),
+}).superRefine((value, context) => {
+  if ((value.hourlyRate === undefined) !== (value.hourlyRateEffectiveFrom === undefined)) {
+    context.addIssue({ code: "custom", message: "Informe o valor-hora e sua data de vigência juntos.", path: ["hourlyRate"] });
+  }
 });
 
 export const manualProjectUpdateSchema = z
@@ -245,9 +255,43 @@ export const manualProjectUpdateSchema = z
     availableToAll: z.boolean().optional(),
     billableByDefault: z.boolean().optional(),
     active: z.boolean().optional(),
+    hourlyRate: z.number().min(0).max(1_000_000).optional(),
+    hourlyRateEffectiveFrom: isoDateSchema.optional(),
+  })
+  .superRefine((value, context) => {
+    if ((value.hourlyRate === undefined) !== (value.hourlyRateEffectiveFrom === undefined)) {
+      context.addIssue({ code: "custom", message: "Informe o valor-hora e sua data de vigência juntos.", path: ["hourlyRate"] });
+    }
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Informe ao menos uma alteração.",
+  });
+
+export const userGroupSchema = z.object({
+  name: z.string().trim().min(2).max(100),
+  managerId: z.string().uuid().nullable().optional(),
+  memberIds: z.array(z.string().uuid()).max(200).default([]),
+  active: z.boolean().default(true),
+});
+
+export const timeGoalSchema = z
+  .object({
+    title: z.string().trim().min(2).max(160),
+    targetSeconds: z.number().int().positive().max(31_536_000),
+    startsOn: isoDateSchema,
+    endsOn: isoDateSchema,
+    targetUserId: z.string().uuid().nullable().optional(),
+    targetGroupId: z.string().uuid().nullable().optional(),
+    manualProjectId: z.string().uuid().nullable().optional(),
+    costCenterId: z.string().uuid().nullable().optional(),
+  })
+  .superRefine((value, context) => {
+    if (Boolean(value.targetUserId) === Boolean(value.targetGroupId)) {
+      context.addIssue({ code: "custom", message: "Selecione exatamente um usuário ou grupo.", path: ["targetUserId"] });
+    }
+    if (value.endsOn < value.startsOn) {
+      context.addIssue({ code: "custom", message: "A data final não pode ser anterior à inicial.", path: ["endsOn"] });
+    }
   });
 
 export const timerStartSchema = z.object({

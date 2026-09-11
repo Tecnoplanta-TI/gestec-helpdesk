@@ -139,49 +139,24 @@ export async function listProjects(
   options?: { includePrivateManual?: boolean },
 ) {
   const search = query?.trim();
-  const [costCenters, manualProjects] = await Promise.all([
-    prisma.costCenter.findMany({
-      where: {
-        active: true,
-        ...(search
-          ? {
-              OR: [
-                { name: { contains: search, mode: "insensitive" as const } },
-                { code: { contains: search, mode: "insensitive" as const } },
-              ],
-            }
-          : {}),
-      },
-      select: { id: true, name: true, code: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.manualProject.findMany({
-      where: {
-        active: true,
-        ...(options?.includePrivateManual ? {} : { availableToAll: true }),
-        ...(search
-          ? { name: { contains: search, mode: "insensitive" as const } }
-          : {}),
-      },
-      select: { id: true, name: true, billableByDefault: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const manualProjects = await prisma.manualProject.findMany({
+    where: {
+      active: true,
+      ...(options?.includePrivateManual ? {} : { availableToAll: true }),
+      ...(search
+        ? { name: { contains: search, mode: "insensitive" as const } }
+        : {}),
+    },
+    select: { id: true, name: true, billableByDefault: true },
+    orderBy: { name: "asc" },
+  });
 
-  return [
-    ...costCenters.map((project) => ({
-      id: `cost-center:${project.id}`,
-      name: project.name,
-      code: project.code,
-      billableByDefault: true,
-    })),
-    ...manualProjects.map((project) => ({
+  return manualProjects.map((project) => ({
       id: `manual:${project.id}`,
       name: project.name,
       code: null,
       billableByDefault: project.billableByDefault,
-    })),
-  ];
+    }));
 }
 
 export async function listProjectCatalog(options?: {
@@ -191,17 +166,7 @@ export async function listProjectCatalog(options?: {
   monthTo?: Date;
 }) {
   const activeWhere = options?.includeInactive ? {} : { active: true };
-  const [costCenters, manualProjects, monthEntries] = await Promise.all([
-    prisma.costCenter.findMany({
-      where: activeWhere,
-      select: {
-        id: true,
-        name: true,
-        code: true,
-        active: true,
-      },
-      orderBy: { name: "asc" },
-    }),
+  const [manualProjects, monthEntries] = await Promise.all([
     prisma.manualProject.findMany({
       where: {
         ...activeWhere,
@@ -214,6 +179,11 @@ export async function listProjectCatalog(options?: {
         availableToAll: true,
         active: true,
         billableByDefault: true,
+        hourlyRates: {
+          take: 1,
+          orderBy: { effectiveFrom: "desc" },
+          select: { amountCents: true, effectiveFrom: true },
+        },
       },
       orderBy: [{ active: "desc" }, { name: "asc" }],
     }),
@@ -239,22 +209,7 @@ export async function listProjectCatalog(options?: {
     if (id) monthSeconds.set(id, row._sum.durationSeconds ?? 0);
   }
 
-  return [
-    ...costCenters.map((project) => {
-      const id = `cost-center:${project.id}`;
-      return {
-        id,
-        kind: "cost-center" as const,
-        name: project.name,
-        code: project.code,
-        color: null as string | null,
-        availableToAll: true,
-        active: project.active,
-        billableByDefault: true,
-        monthSeconds: monthSeconds.get(id) ?? 0,
-      };
-    }),
-    ...manualProjects.map((project) => {
+  return manualProjects.map((project) => {
       const id = `manual:${project.id}`;
       return {
         id,
@@ -265,8 +220,9 @@ export async function listProjectCatalog(options?: {
         availableToAll: project.availableToAll,
         active: project.active,
         billableByDefault: project.billableByDefault,
+        hourlyRateCents: project.hourlyRates[0]?.amountCents ?? null,
+        hourlyRateEffectiveFrom: project.hourlyRates[0]?.effectiveFrom ?? null,
         monthSeconds: monthSeconds.get(id) ?? 0,
       };
-    }),
-  ].sort((left, right) => right.monthSeconds - left.monthSeconds);
+    }).sort((left, right) => right.monthSeconds - left.monthSeconds);
 }

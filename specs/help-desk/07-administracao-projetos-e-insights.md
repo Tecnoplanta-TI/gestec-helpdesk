@@ -39,7 +39,7 @@ Documentar catálogos, vínculos corporativos, faturamento de tickets, indicador
 3. Informa nome, código/identificador e status.
 4. O sistema normaliza e valida duplicidade.
 5. Ao salvar, atribui identidade estável e registra auditoria.
-6. Centro ativo torna-se elegível em tickets e aparece automaticamente como projeto em Meu Tempo.
+6. Centro ativo torna-se elegível em tickets como Cliente/Centro de custo. Ele não se torna um Projeto Semear automaticamente.
 
 **Regras:**
 
@@ -57,7 +57,7 @@ Documentar catálogos, vínculos corporativos, faturamento de tickets, indicador
 Dado um centro de custo ativo cadastrado no Gestec
 Quando a alteração for salva
 Então ele deve ficar disponível para novos tickets
-E deve aparecer como projeto em Meu Tempo sem cadastro adicional
+E deve permanecer separado dos Projetos Semear
 
 Dado um centro de custo com apontamentos históricos
 Quando ele for inativado
@@ -143,20 +143,20 @@ Mas os apontamentos existentes devem continuar legíveis
 
 **Regras:** `BR-0746` não criar login ou papel paralelo; `BR-0747` negar por padrão; `BR-0748` ação administrativa não é implicada por simples `view`.
 
-## HD-US-0717 — Disponibilizar centros de custo em Meu Tempo
+## HD-US-0717 — Separar clientes de Projetos Semear
 
 **Classificação:** `CONFIRMED`. **Prioridade:** P1. **Perfil:** Sistema; Administrador do catálogo; usuário de Meu Tempo.
 
-**User Story:** Como usuário de Meu Tempo, quero encontrar centros de custo ativos no seletor Projeto para classificar horas sem criar um projeto duplicado.
+**User Story:** Como usuário da Jornada, quero selecionar somente Projetos Semear ao registrar horas e administrar Clientes/Centros de custo em cadastro separado, para não confundir as duas entidades.
 
 **Regras:**
 
-- `BR-0755` cada centro de custo ativo produz exatamente uma opção lógica no seletor Projeto.
-- `BR-0756` a opção referencia o identificador estável do centro, não uma cópia por nome.
-- `BR-0757` nome e status alterados refletem no seletor após atualização consistente do catálogo.
-- `BR-0758` centro inativo não aparece para novo uso e permanece resolvível no histórico.
-- `BR-0759` o dialog Criar projeto de Meu Tempo nunca cria nem edita centro de custo.
-- `BR-0760` a interface não expõe origem técnica nem separa centros de custo e projetos manuais por badge/grupo.
+- `BR-0755` Cliente/Centro de custo e Projeto Semear são cadastros independentes.
+- `BR-0756` o seletor de novos apontamentos lista somente Projetos Semear ativos autorizados.
+- `BR-0757` centros de custo permanecem disponíveis para tickets e leitura de apontamentos históricos, sem surgir como projeto novo.
+- `BR-0758` inativar qualquer cadastro impede novo uso no respectivo contexto e preserva histórico.
+- `BR-0759` o dialog Criar projeto nunca cria nem edita Cliente/Centro de custo.
+- `BR-0760` os nomes internos de implementação não são exibidos na interface.
 
 ```gherkin
 Dado que Financeiro está ativo no cadastro de centros de custo

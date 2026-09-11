@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft01Icon, PlayIcon, StopIcon } from "@/lib/icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -75,6 +75,8 @@ type TicketData = {
   requestType: string | null;
   service: string | null;
   serviceGroup: string | null;
+  applicationOrProcess: string | null;
+  assetCode: string | null;
   requesterName: string;
   assigneeId: string | null;
   costCenterId: string | null;
@@ -172,6 +174,7 @@ export function TicketWorkspace({
   users,
   assets,
   services,
+  serviceGroups,
   currentUserId,
   canManageTickets,
 }: {
@@ -185,6 +188,7 @@ export function TicketWorkspace({
     code: string;
     group: { name: string };
   }>;
+  serviceGroups: string[];
   currentUserId: string;
   canManageTickets: boolean;
 }) {
@@ -242,6 +246,18 @@ export function TicketWorkspace({
       user.id !== ticket.assigneeId &&
       !ticket.participants.some((item) => item.user.id === user.id),
   );
+  const isTriageStage = ["NEW", "TRIAGE"].includes(ticket.status);
+  const isInterruption =
+    normalizeRequestType(ticket.requestType) === "interrupcao_servico";
+  const isZeevServiceGroup = ticket.serviceGroup?.trim().toLowerCase() === "zeev";
+
+  useEffect(() => {
+    const failed = ticket.syncExecutions.filter(
+      (item) => item.status === "FAILED",
+    );
+    if (failed.length)
+      console.error("Falhas de sincronização do ticket", failed);
+  }, [ticket.syncExecutions]);
 
   function mutate(action: () => Promise<unknown>, success: string) {
     startTransition(async () => {
@@ -250,11 +266,12 @@ export function TicketWorkspace({
         toast.success(success);
         router.refresh();
       } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível concluir a ação.",
-        );
+        const message =
+          error instanceof Error ? error.message : "Não foi possível concluir a ação.";
+        if (/zeev|sincroniza/i.test(message)) {
+          console.error("Falha de sincronização do ticket", error);
+          toast.error("Não foi possível concluir a etapa agora. Tente novamente.");
+        } else toast.error(message);
       }
     });
   }
@@ -273,7 +290,10 @@ export function TicketWorkspace({
           </Button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight">
+              <h1
+                className="max-w-[min(100%,58rem)] truncate text-2xl font-semibold tracking-tight"
+                title={`#${ticket.number} — ${ticket.title}`}
+              >
                 #{ticket.number} — {ticket.title}
               </h1>
               <Badge variant="secondary">
@@ -410,7 +430,7 @@ export function TicketWorkspace({
                   );
                   setContactMessage("");
                   setContactDialogOpen(false);
-                }, "Contato inicial registrado e sincronizado com o Zeev.")
+                }, "Contato inicial registrado.")
               }
             >
               Registrar e iniciar atendimento
@@ -419,23 +439,12 @@ export function TicketWorkspace({
         </DialogContent>
       </Dialog>
 
-      {triageSyncBlocked && !initialContactRecorded && (
-        <Alert variant="destructive">
-          <AlertTitle>Triagem pendente de sincronização</AlertTitle>
-          <AlertDescription>
-            O contato inicial permanece bloqueado até que a aprovação da triagem
-            seja confirmada no Zeev. Verifique a tentativa abaixo e tente
-            novamente após corrigir a integração.
-          </AlertDescription>
-        </Alert>
-      )}
-
       {!ticket.costCenter && (
         <Alert variant="destructive">
           <AlertTitle>Centro de custo pendente</AlertTitle>
           <AlertDescription>
-            Defina um projeto válido antes da conclusão. Horas sem centro de
-            custo não são faturáveis.
+            Defina um centro de custo válido antes da conclusão. Horas sem
+            centro de custo não são faturáveis.
           </AlertDescription>
         </Alert>
       )}
@@ -445,8 +454,7 @@ export function TicketWorkspace({
           <CardHeader>
             <CardTitle>Aprovar triagem</CardTitle>
             <CardDescription>
-              Confirme a classificação e o responsável. Em tickets do Zeev, a
-              aprovação também conclui a tarefa de triagem no processo.
+              Confirme a classificação e o responsável antes de iniciar o atendimento.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
@@ -507,7 +515,7 @@ export function TicketWorkspace({
                     Classificação conferida
                   </FieldLabel>
                   <FieldDescription>
-                    O tipo, a prioridade e o projeto foram revisados.
+                    O tipo, a prioridade e o centro de custo foram revisados.
                   </FieldDescription>
                 </div>
               </Field>
@@ -905,6 +913,7 @@ export function TicketWorkspace({
         </div>
 
         <div className="flex flex-col gap-6">
+          {isTriageStage && (
           <Card>
             <CardHeader>
               <CardTitle>Classificação</CardTitle>
@@ -995,12 +1004,37 @@ export function TicketWorkspace({
               </Field>
               <Field>
                 <FieldLabel>Grupo de serviços</FieldLabel>
-                <div className="text-sm">
-                  {ticket.serviceGroup?.trim() || "Não informado pelo Zeev"}
-                </div>
+                <Select
+                  value={ticket.serviceGroup?.trim() || "none"}
+                  onValueChange={(value) =>
+                    mutate(
+                      () =>
+                        apiRequest(
+                          `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
+                          {
+                            method: "PATCH",
+                            headers: { "content-type": "application/json" },
+                            body: JSON.stringify({
+                              serviceGroup: value === "none" ? null : value,
+                              version: ticket.version,
+                            }),
+                          },
+                        ),
+                      "Grupo de serviços atualizado.",
+                    )
+                  }
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Não classificado</SelectItem>
+                    {serviceGroups.map((group) => (
+                      <SelectItem key={group} value={group}>{group}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </Field>
               <Field>
-                <FieldLabel>Projeto</FieldLabel>
+                <FieldLabel>Centro de custo</FieldLabel>
                 <Select
                   value={ticket.costCenterId ?? "none"}
                   onValueChange={(value) =>
@@ -1017,7 +1051,7 @@ export function TicketWorkspace({
                             }),
                           },
                         ),
-                      "Projeto atualizado.",
+                      "Centro de custo atualizado.",
                     )
                   }
                 >
@@ -1025,7 +1059,7 @@ export function TicketWorkspace({
                     <SelectValue>
                       {(value) =>
                         value === "none"
-                          ? "Pendente de classificação"
+                          ? "Centro de custo pendente"
                           : (costCenters.find((item) => item.id === value)
                               ?.name ?? "Selecionar centro de custo")
                       }
@@ -1043,8 +1077,47 @@ export function TicketWorkspace({
                   </SelectContent>
                 </Select>
               </Field>
+              {isZeevServiceGroup && (
+                <Field>
+                  <FieldLabel htmlFor="triage-application">Aplicativo ou processo</FieldLabel>
+                  <Input
+                    id="triage-application"
+                    defaultValue={ticket.applicationOrProcess ?? ""}
+                    onBlur={(event) => {
+                      if (event.currentTarget.value === (ticket.applicationOrProcess ?? "")) return;
+                      mutate(
+                        () => apiRequest(`/api/v1/gestec-help-desk/tickets/${ticket.id}`, {
+                          method: "PATCH", headers: { "content-type": "application/json" },
+                          body: JSON.stringify({ applicationOrProcess: event.currentTarget.value || null, version: ticket.version }),
+                        }),
+                        "Aplicativo atualizado.",
+                      );
+                    }}
+                  />
+                </Field>
+              )}
+              {isInterruption && (
+                <Field>
+                  <FieldLabel htmlFor="triage-asset-code">Código do equipamento ou infraestrutura</FieldLabel>
+                  <Input
+                    id="triage-asset-code"
+                    defaultValue={ticket.assetCode ?? ""}
+                    onBlur={(event) => {
+                      if (event.currentTarget.value === (ticket.assetCode ?? "")) return;
+                      mutate(
+                        () => apiRequest(`/api/v1/gestec-help-desk/tickets/${ticket.id}`, {
+                          method: "PATCH", headers: { "content-type": "application/json" },
+                          body: JSON.stringify({ assetCode: event.currentTarget.value || null, version: ticket.version }),
+                        }),
+                        "Informação de infraestrutura atualizada.",
+                      );
+                    }}
+                  />
+                </Field>
+              )}
             </CardContent>
           </Card>
+          )}
 
           <Card>
             <CardHeader>
@@ -1301,83 +1374,6 @@ export function TicketWorkspace({
             </CardContent>
           </Card>
 
-          {ticket.syncExecutions?.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Sincronização Zeev</CardTitle>
-                <CardDescription>
-                  Tentativas de entrada e saída deste ticket.
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-2 text-sm">
-                {ticket.syncExecutions.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex flex-wrap items-center justify-between gap-3 border-b py-2 last:border-0"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p>
-                        {item.direction === "INBOUND"
-                          ? "Zeev → HD"
-                          : "HD → Zeev"}{" "}
-                        · {item.event}
-                      </p>
-                      {item.status === "FAILED" && item.lastError && (
-                        <p className="mt-1 break-words text-xs text-destructive">
-                          {item.lastError}
-                        </p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Badge
-                        variant={
-                          item.status === "FAILED" ? "destructive" : "outline"
-                        }
-                      >
-                        {item.status === "SUCCEEDED"
-                          ? "Sucesso"
-                          : item.status === "FAILED"
-                            ? "Falha"
-                            : "Pendente"}
-                      </Badge>
-                      {canManageTickets &&
-                        item.direction === "OUTBOUND" &&
-                        item.status !== "SUCCEEDED" &&
-                        item.attempts > 0 && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={pending}
-                            onClick={() =>
-                              mutate(async () => {
-                                const execution = await apiRequest<{
-                                  status: string;
-                                  lastError: string | null;
-                                }>(
-                                  `/api/v1/gestec-help-desk/tickets/${ticket.id}/sync/${item.id}/retry`,
-                                  { method: "POST" },
-                                );
-                                if (execution.status === "FAILED") {
-                                  throw new Error(
-                                    execution.lastError ??
-                                      "O Zeev recusou a nova tentativa de sincronização.",
-                                  );
-                                }
-                              }, "Sincronização concluída com o Zeev.")
-                            }
-                          >
-                            {item.status === "FAILED"
-                              ? "Tentar novamente"
-                              : "Tentar agora"}
-                          </Button>
-                        )}
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-          )}
-
           {evaluation && (
             <Card>
               <CardHeader>
@@ -1394,13 +1390,12 @@ export function TicketWorkspace({
             </Card>
           )}
 
-          {ticket.status !== "REOPENED_LOW_SCORE" && (
+          {ticket.status === "IN_PROGRESS" && (
             <Card>
               <CardHeader>
                 <CardTitle>Concluir atendimento</CardTitle>
                 <CardDescription>
-                  Consolida as horas da TI. A avaliação do solicitante continua
-                  no Zeev.
+                  Consolida as horas da TI e encaminha o ticket para aprovação.
                 </CardDescription>
               </CardHeader>
               <CardContent>

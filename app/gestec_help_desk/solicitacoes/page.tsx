@@ -57,7 +57,7 @@ export default async function FollowRequestsPage({
         assignee: { select: { id: true, name: true } },
         costCenter: { select: { name: true } },
       },
-      orderBy: { openedAt: "desc" },
+      orderBy: { openedAt: "asc" },
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize,
     }),

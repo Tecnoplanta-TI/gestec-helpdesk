@@ -27,7 +27,7 @@ export async function GET(request: Request) {
           assignee: { select: { id: true, name: true } },
           costCenter: { select: { id: true, code: true, name: true } },
         },
-        orderBy: [{ priority: "desc" }, { openedAt: "desc" }],
+        orderBy: { openedAt: "asc" },
         skip: (filters.page - 1) * pageSize,
         take: pageSize,
       }),

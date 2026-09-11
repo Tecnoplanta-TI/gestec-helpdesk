@@ -12,6 +12,9 @@ export type Permission =
   | "assets:manage"
   | "reports:view"
   | "reports:export"
+  | "notifications:view"
+  | "goals:view"
+  | "goals:manage"
   | "admin:manage";
 
 const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
@@ -27,6 +30,9 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
     "assets:manage",
     "reports:view",
     "reports:export",
+    "notifications:view",
+    "goals:view",
+    "goals:manage",
     "admin:manage",
   ]),
   MANAGER: new Set<Permission>([
@@ -39,6 +45,9 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
     "assets:view",
     "reports:view",
     "reports:export",
+    "notifications:view",
+    "goals:view",
+    "goals:manage",
   ]),
   TECHNICIAN: new Set<Permission>([
     "tickets:view",
@@ -46,6 +55,8 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
     "time:view",
     "time:write",
     "assets:view",
+    "notifications:view",
+    "goals:view",
   ]),
   AUDITOR: new Set<Permission>([
     "tickets:view",
@@ -53,6 +64,8 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
     "assets:view",
     "reports:view",
     "reports:export",
+    "notifications:view",
+    "goals:view",
   ]),
 };
 

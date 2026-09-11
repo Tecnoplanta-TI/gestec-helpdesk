@@ -33,7 +33,6 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
-import { CreateCostCenterDialog } from "@/components/admin/create-cost-center-dialog";
 import { CreateProjectDialog } from "@/components/time/create-project-dialog";
 import { Add01Icon } from "@/lib/icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -61,7 +60,6 @@ export function AdminProjectManager({
   const [pending, startTransition] = useTransition();
   const [editing, setEditing] = useState<AdminProjectItem | null>(null);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
-  const [createCostCenterOpen, setCreateCostCenterOpen] = useState(false);
   const [deleting, setDeleting] = useState<AdminProjectItem | null>(null);
   const [form, setForm] = useState({
     name: "",
@@ -153,18 +151,11 @@ export function AdminProjectManager({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Projetos</h1>
           <p className="text-sm text-muted-foreground">
-            Edite nome, visibilidade, faturamento e status. Centros de custo
-            também aceitam código.
+            Projetos do programa Semear. Clientes são administrados em seu
+            próprio cadastro.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            onClick={() => setCreateCostCenterOpen(true)}
-          >
-            <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
-            Criar centro de custo
-          </Button>
           <Button onClick={() => setCreateProjectOpen(true)}>
             <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
             Criar projeto
@@ -176,7 +167,7 @@ export function AdminProjectManager({
           <EmptyHeader>
             <EmptyTitle>Nenhum projeto cadastrado</EmptyTitle>
             <EmptyDescription>
-              Crie um projeto manual ou um centro de custo para começar.
+              Crie um projeto Semear para começar.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -383,11 +374,6 @@ export function AdminProjectManager({
         onOpenChange={setCreateProjectOpen}
         showTrigger={false}
         successMessage="Projeto criado."
-        onCreated={() => router.refresh()}
-      />
-      <CreateCostCenterDialog
-        open={createCostCenterOpen}
-        onOpenChange={setCreateCostCenterOpen}
         onCreated={() => router.refresh()}
       />
       <ConfirmDeleteDialog

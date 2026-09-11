@@ -15,20 +15,18 @@
 
 ## 1. Objetivo e limite de duplicidade
 
-Oferecer uma caixa operacional orientada ao trabalho do técnico. A listagem canônica continua sendo a Spec 01; esta tela não cria um segundo CRUD e executa todo recorte sob o RBAC do usuário.
+Oferecer uma central de recebimento de notificações direcionadas ao usuário. A fila operacional de tickets continua sendo a Spec 01; esta tela não cria um segundo CRUD de tickets.
 
 ## 2. Rota, navegação e layout
 
 **Rota:** `/gestec_help_desk/minha-caixa`. **Sidebar ativa:** Minha Caixa. **Breadcrumb:** Gestec Help Desk / Minha Caixa.
 
-**Permissão sugerida:** `view_my_workbox` — nome final em `GAP-007`.
+**Permissão:** `notifications:view`.
 
-- Header com título, ação de atualização e contadores `Atribuídos a mim`, `Não atribuídos` e `Mencionados`.
-- Abas de sistema `Atribuídos a mim`, `Não atribuídos` e `Mencionados`, documentadas e não configuráveis nesta fase.
-- Pesquisa por texto e filtros por prioridade, SLA, status, serviço e período, com ação para limpar o recorte.
-- Tabela desktop com seleção, ticket, assunto, prioridade, status, SLA, responsável e atualização; cards mobile preservam as mesmas informações essenciais.
-- Cada linha oferece **Abrir ticket** e, quando o ticket estiver sem responsável e o usuário possuir permissão, **Assumir**.
-- O detalhe mantém Minha Caixa selecionada quando aberto a partir desse contexto.
+- Header com contador de não lidas e ação para marcar todas como lidas.
+- Filtro de não lidas e pesquisa por título, descrição ou origem.
+- Cada notificação mostra prioridade, origem, data, estado de leitura e link interno quando houver recurso associado.
+- Uma notificação só pode ser lida ou marcada como lida por seu destinatário.
 
 ## 3. API sugerida
 

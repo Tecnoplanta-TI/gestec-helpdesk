@@ -67,9 +67,6 @@ async function main() {
       where: { costCenterId: { in: demoIds } },
       data: { costCenterId: tiCostCenter.id },
     })
-    await prisma.projectHourlyRate.deleteMany({
-      where: { costCenterId: { in: demoIds } },
-    })
     await prisma.costCenter.deleteMany({ where: { id: { in: demoIds } } })
   }
 
@@ -83,6 +80,27 @@ async function main() {
     create: { code: "INFRA", name: "Infraestrutura" },
     update: { name: "Infraestrutura", active: true },
   })
+  const requiredServiceGroups = [
+    ["ACESSOS_CONTAS", "Acessos / Contas"],
+    ["AQUISICAO_ALOCACAO", "Aquisição / Alocação"],
+    ["DASHBOARD", "Dashboard"],
+    ["EMAIL", "Email"],
+    ["GESTEC", "Gestec"],
+    ["IMPRESSORAS", "Impressoras"],
+    ["MANUTENCAO_UPGRADE", "Manutenção / Upgrade"],
+    ["OUTRO", "Outro"],
+    ["PROGRAMAS", "Programas"],
+    ["REDE_INTERNET", "Rede / Internet"],
+    ["SIGER", "SIGER"],
+    ["ZEEV", "Zeev"],
+  ]
+  for (const [code, name] of requiredServiceGroups) {
+    await prisma.serviceGroup.upsert({
+      where: { code },
+      create: { code, name },
+      update: { name, active: true },
+    })
+  }
   const permissoes = await prisma.service.upsert({
     where: { groupId_code: { groupId: acessos.id, code: "PERMISSOES" } },
     create: { groupId: acessos.id, code: "PERMISSOES", name: "Acessos e permissões" },

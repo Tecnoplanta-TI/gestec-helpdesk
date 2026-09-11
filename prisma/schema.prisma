@@ -125,11 +125,10 @@ model CostCenter {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tickets        Ticket[]
-  timeEntries    TimeEntry[]
-  activeTimers   ActiveTimer[]
-  manualProjects ManualProject[] @relation("ProjectClient")
-  timeGoals      TimeGoal[]
+  tickets      Ticket[]
+  timeEntries  TimeEntry[]
+  activeTimers ActiveTimer[]
+  timeGoals    TimeGoal[]
 
   @@index([active, name])
 }
@@ -163,7 +162,6 @@ model Service {
 
 model ManualProject {
   id                String   @id @default(uuid()) @db.Uuid
-  costCenterId      String?  @db.Uuid
   name              String
   normalizedName    String   @unique
   color             String
@@ -175,12 +173,10 @@ model ManualProject {
 
   timeEntries  TimeEntry[]
   activeTimers ActiveTimer[]
-  client       CostCenter?         @relation("ProjectClient", fields: [costCenterId], references: [id], onDelete: SetNull)
   hourlyRates  ProjectHourlyRate[]
   timeGoals    TimeGoal[]
 
   @@index([active, name])
-  @@index([costCenterId, active, name])
 }
 
 model ProjectHourlyRate {
@@ -418,27 +414,28 @@ model TicketWorkPeriod {
 }
 
 model TimeEntry {
-  id                   String          @id @default(uuid()) @db.Uuid
-  userId               String          @db.Uuid
-  ticketId             String?         @db.Uuid
-  costCenterId         String?         @db.Uuid
-  manualProjectId      String?         @db.Uuid
-  source               TimeEntrySource
-  status               TimeEntryStatus @default(VALID)
-  description          String
-  startedAt            DateTime
-  endedAt              DateTime
-  durationSeconds      Int
-  billable             Boolean         @default(false)
-  projectNameSnapshot  String?
-  ticketNumberSnapshot Int?
-  idempotencyKey       String?         @unique
-  timerStartRequestKey String?         @unique
-  timerStopRequestKey  String?         @unique
-  correctionReason     String?
-  version              Int             @default(1)
-  createdAt            DateTime        @default(now())
-  updatedAt            DateTime        @updatedAt
+  id                      String          @id @default(uuid()) @db.Uuid
+  userId                  String          @db.Uuid
+  ticketId                String?         @db.Uuid
+  costCenterId            String?         @db.Uuid
+  manualProjectId         String?         @db.Uuid
+  source                  TimeEntrySource
+  status                  TimeEntryStatus @default(VALID)
+  description             String
+  startedAt               DateTime
+  endedAt                 DateTime
+  durationSeconds         Int
+  hourlyRateCentsSnapshot Int?
+  billable                Boolean         @default(false)
+  projectNameSnapshot     String?
+  ticketNumberSnapshot    Int?
+  idempotencyKey          String?         @unique
+  timerStartRequestKey    String?         @unique
+  timerStopRequestKey     String?         @unique
+  correctionReason        String?
+  version                 Int             @default(1)
+  createdAt               DateTime        @default(now())
+  updatedAt               DateTime        @updatedAt
 
   user          UserRef        @relation(fields: [userId], references: [id], onDelete: Restrict)
   ticket        Ticket?        @relation(fields: [ticketId], references: [id], onDelete: Restrict)
