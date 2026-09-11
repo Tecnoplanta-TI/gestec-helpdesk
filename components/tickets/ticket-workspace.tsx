@@ -30,11 +30,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
@@ -64,7 +71,10 @@ type TicketData = {
   description: string;
   status: string;
   priority: string;
+  resolutionCycle: number;
   requestType: string | null;
+  service: string | null;
+  serviceGroup: string | null;
   requesterName: string;
   assigneeId: string | null;
   costCenterId: string | null;
@@ -96,6 +106,7 @@ type TicketData = {
   workPeriods: Array<{
     id: string;
     userId: string;
+    cycle: number;
     startedAt: string;
     endedAt: string | null;
     valid: boolean;
@@ -117,6 +128,8 @@ type TicketData = {
     event: string;
     direction: string;
     status: string;
+    payload: unknown;
+    attempts: number;
     lastError: string | null;
     createdAt: string;
   }>;
@@ -138,6 +151,20 @@ type TicketData = {
     asset: { id: string; assetTag: string; name: string };
   }>;
 };
+
+function isStageReady(
+  payload: unknown,
+  stage: string,
+  resolutionCycle: number,
+) {
+  return Boolean(
+    payload &&
+    typeof payload === "object" &&
+    !Array.isArray(payload) &&
+    (payload as Record<string, unknown>).stage === stage &&
+    (payload as Record<string, unknown>).resolutionCycle === resolutionCycle,
+  );
+}
 
 export function TicketWorkspace({
   ticket,
@@ -164,11 +191,16 @@ export function TicketWorkspace({
   const evaluation = ticket.evaluations[0] ?? null;
   const router = useRouter();
   const [pending, startTransition] = useTransition();
+  const [contactDialogOpen, setContactDialogOpen] = useState(false);
+  const [contactMessage, setContactMessage] = useState("");
   const [comment, setComment] = useState("");
   const [internal, setInternal] = useState(true);
   const [resolution, setResolution] = useState(ticket.resolutionSummary ?? "");
   const [assigneeId, setAssigneeId] = useState(ticket.assigneeId ?? "");
   const [assignReason, setAssignReason] = useState("");
+  const [triageReason, setTriageReason] = useState("");
+  const [classificationConfirmed, setClassificationConfirmed] = useState(false);
+  const [assignmentConfirmed, setAssignmentConfirmed] = useState(false);
   const [participantId, setParticipantId] = useState("");
   const [assetId, setAssetId] = useState("");
   const activeWork = useMemo(
@@ -177,6 +209,29 @@ export function TicketWorkspace({
         (period) => period.userId === currentUserId && !period.endedAt,
       ),
     [ticket.workPeriods, currentUserId],
+  );
+  const initialContactRecorded = ticket.workPeriods.some(
+    (period) => period.cycle === ticket.resolutionCycle,
+  );
+  const triageSyncBlocked = ticket.syncExecutions.some(
+    (item) =>
+      item.event === "ticket.triage_approved" &&
+      item.direction === "OUTBOUND" &&
+      item.status !== "SUCCEEDED",
+  );
+  const internalApprovalReady = ticket.syncExecutions.some(
+    (item) =>
+      item.event === "ticket.stage_ready" &&
+      item.direction === "INBOUND" &&
+      item.status === "SUCCEEDED" &&
+      isStageReady(item.payload, "INTERNAL_APPROVAL", ticket.resolutionCycle),
+  );
+  const deviationReviewReady = ticket.syncExecutions.some(
+    (item) =>
+      item.event === "ticket.stage_ready" &&
+      item.direction === "INBOUND" &&
+      item.status === "SUCCEEDED" &&
+      isStageReady(item.payload, "DEVIATION_REVIEW", ticket.resolutionCycle),
   );
   const sla = slaState(
     ticket.serviceDeadline,
@@ -264,7 +319,7 @@ export function TicketWorkspace({
             <HugeiconsIcon data-icon="inline-start" icon={StopIcon} /> Parar
             atendimento
           </Button>
-        ) : (
+        ) : initialContactRecorded || ticket.resolutionCycle > 1 ? (
           <Button
             disabled={
               pending ||
@@ -284,15 +339,96 @@ export function TicketWorkspace({
                       }),
                     },
                   ),
-                "Atendimento iniciado.",
+                "Atendimento retomado.",
               )
             }
           >
-            <HugeiconsIcon data-icon="inline-start" icon={PlayIcon} /> Iniciar
+            <HugeiconsIcon data-icon="inline-start" icon={PlayIcon} /> Retomar
             atendimento
+          </Button>
+        ) : (
+          <Button
+            disabled={
+              pending ||
+              triageSyncBlocked ||
+              ["NEW", "TRIAGE", "RESOLVED", "CLOSED", "CANCELLED"].includes(
+                ticket.status,
+              )
+            }
+            onClick={() => setContactDialogOpen(true)}
+          >
+            <HugeiconsIcon data-icon="inline-start" icon={PlayIcon} /> Registrar
+            contato inicial
           </Button>
         )}
       </div>
+
+      <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar contato inicial</DialogTitle>
+            <DialogDescription>
+              Esta informação será registrada no histórico do ticket e enviada
+              ao Zeev ao concluir a tarefa de Contato inicial.
+            </DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="initial-contact-message">
+              Informações do contato inicial
+            </FieldLabel>
+            <Textarea
+              id="initial-contact-message"
+              value={contactMessage}
+              onChange={(event) => setContactMessage(event.target.value)}
+              placeholder="Ex.: Contato realizado com o solicitante; acesso validado e atendimento iniciado."
+              disabled={pending}
+            />
+            <FieldDescription>
+              O solicitante poderá visualizar esta mensagem no processo do Zeev.
+            </FieldDescription>
+          </Field>
+          <DialogFooter>
+            <DialogClose
+              render={<Button variant="outline" disabled={pending} />}
+            >
+              Cancelar
+            </DialogClose>
+            <Button
+              disabled={pending || contactMessage.trim().length < 3}
+              onClick={() =>
+                mutate(async () => {
+                  await apiRequest(
+                    `/api/v1/gestec-help-desk/tickets/${ticket.id}/initial-contact/start`,
+                    {
+                      method: "POST",
+                      headers: { "content-type": "application/json" },
+                      body: JSON.stringify({
+                        message: contactMessage,
+                        requestKey: crypto.randomUUID(),
+                      }),
+                    },
+                  );
+                  setContactMessage("");
+                  setContactDialogOpen(false);
+                }, "Contato inicial registrado e sincronizado com o Zeev.")
+              }
+            >
+              Registrar e iniciar atendimento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {triageSyncBlocked && !initialContactRecorded && (
+        <Alert variant="destructive">
+          <AlertTitle>Triagem pendente de sincronização</AlertTitle>
+          <AlertDescription>
+            O contato inicial permanece bloqueado até que a aprovação da triagem
+            seja confirmada no Zeev. Verifique a tentativa abaixo e tente
+            novamente após corrigir a integração.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {!ticket.costCenter && (
         <Alert variant="destructive">
@@ -302,6 +438,238 @@ export function TicketWorkspace({
             custo não são faturáveis.
           </AlertDescription>
         </Alert>
+      )}
+
+      {canManageTickets && ["NEW", "TRIAGE"].includes(ticket.status) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Aprovar triagem</CardTitle>
+            <CardDescription>
+              Confirme a classificação e o responsável. Em tickets do Zeev, a
+              aprovação também conclui a tarefa de triagem no processo.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-5">
+            <Field>
+              <FieldLabel>Responsável pelo atendimento</FieldLabel>
+              <Select
+                value={assigneeId || "none"}
+                onValueChange={(value) =>
+                  setAssigneeId(value === "none" ? "" : (value ?? ""))
+                }
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue>
+                    {(value) =>
+                      users.find((user) => user.id === value)?.name ??
+                      "Selecionar responsável"
+                    }
+                  </SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="none">Selecionar responsável</SelectItem>
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="triage-reason">
+                Observação da triagem{" "}
+                <span className="text-muted-foreground">(opcional)</span>
+              </FieldLabel>
+              <Textarea
+                id="triage-reason"
+                value={triageReason}
+                onChange={(event) => setTriageReason(event.target.value)}
+                placeholder="Registre uma orientação para o atendimento"
+              />
+            </Field>
+            <FieldSet>
+              <FieldLegend variant="label">
+                Conferências obrigatórias
+              </FieldLegend>
+              <Field orientation="horizontal">
+                <Checkbox
+                  id="classification-confirmed"
+                  checked={classificationConfirmed}
+                  onCheckedChange={(checked) =>
+                    setClassificationConfirmed(Boolean(checked))
+                  }
+                />
+                <div className="flex flex-col gap-1">
+                  <FieldLabel htmlFor="classification-confirmed">
+                    Classificação conferida
+                  </FieldLabel>
+                  <FieldDescription>
+                    O tipo, a prioridade e o projeto foram revisados.
+                  </FieldDescription>
+                </div>
+              </Field>
+              <Field orientation="horizontal">
+                <Checkbox
+                  id="assignment-confirmed"
+                  checked={assignmentConfirmed}
+                  onCheckedChange={(checked) =>
+                    setAssignmentConfirmed(Boolean(checked))
+                  }
+                />
+                <div className="flex flex-col gap-1">
+                  <FieldLabel htmlFor="assignment-confirmed">
+                    Responsável confirmado
+                  </FieldLabel>
+                  <FieldDescription>
+                    O profissional selecionado será responsável pelo
+                    atendimento.
+                  </FieldDescription>
+                </div>
+              </Field>
+            </FieldSet>
+          </CardContent>
+          <CardFooter className="justify-end">
+            <Button
+              disabled={
+                pending ||
+                !assigneeId ||
+                !classificationConfirmed ||
+                !assignmentConfirmed
+              }
+              onClick={() =>
+                mutate(
+                  () =>
+                    apiRequest(
+                      `/api/v1/gestec-help-desk/tickets/${ticket.id}/triage/approve`,
+                      {
+                        method: "POST",
+                        headers: { "content-type": "application/json" },
+                        body: JSON.stringify({
+                          assigneeId,
+                          reason: triageReason || undefined,
+                          checklist: {
+                            classificationConfirmed: true,
+                            assignmentConfirmed: true,
+                          },
+                          version: ticket.version,
+                          requestKey: crypto.randomUUID(),
+                        }),
+                      },
+                    ),
+                  "Triagem aprovada. O atendimento já pode ser iniciado.",
+                )
+              }
+            >
+              Aprovar triagem
+            </Button>
+          </CardFooter>
+        </Card>
+      )}
+
+      {ticket.status === "WAITING_APPROVAL" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Aprovação da conclusão</CardTitle>
+            <CardDescription>
+              {internalApprovalReady
+                ? "A tarefa Aprovar conclusão está pronta no Zeev. Confirme-a aqui para encaminhar o ticket à validação do solicitante."
+                : "A conclusão foi enviada ao Zeev. Aguarde o processo chegar à tarefa Aprovar conclusão."}
+            </CardDescription>
+          </CardHeader>
+          {internalApprovalReady && (
+            <CardFooter className="justify-end">
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  mutate(
+                    () =>
+                      apiRequest(
+                        `/api/v1/gestec-help-desk/tickets/${ticket.id}/approval/confirm`,
+                        {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            version: ticket.version,
+                            requestKey: crypto.randomUUID(),
+                          }),
+                        },
+                      ),
+                    "Conclusão aprovada e sincronizada com o Zeev.",
+                  )
+                }
+              >
+                Aprovar conclusão
+              </Button>
+            </CardFooter>
+          )}
+        </Card>
+      )}
+
+      {ticket.status === "REOPENED_LOW_SCORE" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Revisar desvio</CardTitle>
+            <CardDescription>
+              {deviationReviewReady
+                ? "A tarefa Verificar desvio está pronta no Zeev. Decida aqui se o solicitante fará uma nova avaliação ou se o ticket será concluído."
+                : "A avaliação baixa foi recebida. Aguarde o processo chegar à tarefa Verificar desvio no Zeev."}
+            </CardDescription>
+          </CardHeader>
+          {deviationReviewReady && (
+            <CardFooter className="flex flex-wrap justify-end gap-2">
+              <Button
+                variant="outline"
+                disabled={pending}
+                onClick={() =>
+                  mutate(
+                    () =>
+                      apiRequest(
+                        `/api/v1/gestec-help-desk/tickets/${ticket.id}/deviation/review`,
+                        {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            action: "CLOSE_TICKET",
+                            version: ticket.version,
+                            requestKey: crypto.randomUUID(),
+                          }),
+                        },
+                      ),
+                    "Ticket concluído e decisão sincronizada com o Zeev.",
+                  )
+                }
+              >
+                Concluir ticket
+              </Button>
+              <Button
+                disabled={pending}
+                onClick={() =>
+                  mutate(
+                    () =>
+                      apiRequest(
+                        `/api/v1/gestec-help-desk/tickets/${ticket.id}/deviation/review`,
+                        {
+                          method: "POST",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            action: "REQUEST_REEVALUATION",
+                            version: ticket.version,
+                            requestKey: crypto.randomUUID(),
+                          }),
+                        },
+                      ),
+                    "Nova avaliação solicitada e sincronização registrada.",
+                  )
+                }
+              >
+                Solicitar nova avaliação
+              </Button>
+            </CardFooter>
+          )}
+        </Card>
       )}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.65fr)_minmax(22rem,0.75fr)]">
@@ -626,6 +994,12 @@ export function TicketWorkspace({
                 </Select>
               </Field>
               <Field>
+                <FieldLabel>Grupo de serviços</FieldLabel>
+                <div className="text-sm">
+                  {ticket.serviceGroup?.trim() || "Não informado pelo Zeev"}
+                </div>
+              </Field>
+              <Field>
                 <FieldLabel>Projeto</FieldLabel>
                 <Select
                   value={ticket.costCenterId ?? "none"}
@@ -939,23 +1313,65 @@ export function TicketWorkspace({
                 {ticket.syncExecutions.map((item) => (
                   <div
                     key={item.id}
-                    className="flex items-center justify-between gap-3 border-b py-2 last:border-0"
+                    className="flex flex-wrap items-center justify-between gap-3 border-b py-2 last:border-0"
                   >
-                    <span>
-                      {item.direction === "INBOUND" ? "Zeev → HD" : "HD → Zeev"}{" "}
-                      · {item.event}
-                    </span>
-                    <Badge
-                      variant={
-                        item.status === "FAILED" ? "destructive" : "outline"
-                      }
-                    >
-                      {item.status === "SUCCEEDED"
-                        ? "Sucesso"
-                        : item.status === "FAILED"
-                          ? "Falha"
-                          : "Pendente"}
-                    </Badge>
+                    <div className="min-w-0 flex-1">
+                      <p>
+                        {item.direction === "INBOUND"
+                          ? "Zeev → HD"
+                          : "HD → Zeev"}{" "}
+                        · {item.event}
+                      </p>
+                      {item.status === "FAILED" && item.lastError && (
+                        <p className="mt-1 break-words text-xs text-destructive">
+                          {item.lastError}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge
+                        variant={
+                          item.status === "FAILED" ? "destructive" : "outline"
+                        }
+                      >
+                        {item.status === "SUCCEEDED"
+                          ? "Sucesso"
+                          : item.status === "FAILED"
+                            ? "Falha"
+                            : "Pendente"}
+                      </Badge>
+                      {canManageTickets &&
+                        item.direction === "OUTBOUND" &&
+                        item.status !== "SUCCEEDED" &&
+                        item.attempts > 0 && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={pending}
+                            onClick={() =>
+                              mutate(async () => {
+                                const execution = await apiRequest<{
+                                  status: string;
+                                  lastError: string | null;
+                                }>(
+                                  `/api/v1/gestec-help-desk/tickets/${ticket.id}/sync/${item.id}/retry`,
+                                  { method: "POST" },
+                                );
+                                if (execution.status === "FAILED") {
+                                  throw new Error(
+                                    execution.lastError ??
+                                      "O Zeev recusou a nova tentativa de sincronização.",
+                                  );
+                                }
+                              }, "Sincronização concluída com o Zeev.")
+                            }
+                          >
+                            {item.status === "FAILED"
+                              ? "Tentar novamente"
+                              : "Tentar agora"}
+                          </Button>
+                        )}
+                    </div>
                   </div>
                 ))}
               </CardContent>
@@ -978,88 +1394,92 @@ export function TicketWorkspace({
             </Card>
           )}
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Concluir atendimento</CardTitle>
-              <CardDescription>
-                Consolida as horas da TI. A avaliação do solicitante continua no
-                Zeev.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Field>
-                <FieldLabel htmlFor="resolution">Resumo da solução</FieldLabel>
-                <Textarea
-                  id="resolution"
-                  value={resolution}
-                  onChange={(event) => setResolution(event.target.value)}
-                  placeholder="Explique o que foi corrigido"
-                />
-              </Field>
-            </CardContent>
-            <CardFooter>
-              <Dialog>
-                <DialogTrigger
-                  render={
-                    <Button
-                      className="w-full"
-                      disabled={
-                        pending ||
-                        !resolution.trim() ||
-                        !ticket.costCenterId ||
-                        ["RESOLVED", "CLOSED"].includes(ticket.status)
-                      }
-                    />
-                  }
-                >
-                  Finalizar no Help Desk
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Finalizar ticket?</DialogTitle>
-                    <DialogDescription>
-                      As horas válidas são consolidadas e o Zeev avança as
-                      etapas da TI (contato, atendimento e aprovação interna). A
-                      avaliação permanece com o solicitante no Zeev.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter>
-                    <DialogClose render={<Button variant="outline" />}>
-                      Cancelar
-                    </DialogClose>
-                    <DialogClose
-                      render={
-                        <Button
-                          onClick={() =>
-                            mutate(
-                              () =>
-                                apiRequest(
-                                  `/api/v1/gestec-help-desk/tickets/${ticket.id}/resolve`,
-                                  {
-                                    method: "POST",
-                                    headers: {
-                                      "content-type": "application/json",
+          {ticket.status !== "REOPENED_LOW_SCORE" && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Concluir atendimento</CardTitle>
+                <CardDescription>
+                  Consolida as horas da TI. A avaliação do solicitante continua
+                  no Zeev.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Field>
+                  <FieldLabel htmlFor="resolution">
+                    Resumo da solução
+                  </FieldLabel>
+                  <Textarea
+                    id="resolution"
+                    value={resolution}
+                    onChange={(event) => setResolution(event.target.value)}
+                    placeholder="Explique o que foi corrigido"
+                  />
+                </Field>
+              </CardContent>
+              <CardFooter>
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <Button
+                        className="w-full"
+                        disabled={
+                          pending ||
+                          !resolution.trim() ||
+                          !ticket.costCenterId ||
+                          ["RESOLVED", "CLOSED"].includes(ticket.status)
+                        }
+                      />
+                    }
+                  >
+                    Finalizar no Help Desk
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Finalizar ticket?</DialogTitle>
+                      <DialogDescription>
+                        As horas válidas são consolidadas e o Zeev avança as
+                        etapas da TI (contato, atendimento e aprovação interna).
+                        A avaliação permanece com o solicitante no Zeev.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                      <DialogClose render={<Button variant="outline" />}>
+                        Cancelar
+                      </DialogClose>
+                      <DialogClose
+                        render={
+                          <Button
+                            onClick={() =>
+                              mutate(
+                                () =>
+                                  apiRequest(
+                                    `/api/v1/gestec-help-desk/tickets/${ticket.id}/resolve`,
+                                    {
+                                      method: "POST",
+                                      headers: {
+                                        "content-type": "application/json",
+                                      },
+                                      body: JSON.stringify({
+                                        resolutionSummary: resolution,
+                                        version: ticket.version,
+                                        requestKey: `zeev:${ticket.externalReference}:resolve:${ticket.version}`,
+                                      }),
                                     },
-                                    body: JSON.stringify({
-                                      resolutionSummary: resolution,
-                                      version: ticket.version,
-                                      requestKey: `zeev:${ticket.externalReference}:resolve:${ticket.version}`,
-                                    }),
-                                  },
-                                ),
-                              "Ticket finalizado e sincronização registrada.",
-                            )
-                          }
-                        />
-                      }
-                    >
-                      Confirmar conclusão
-                    </DialogClose>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </CardFooter>
-          </Card>
+                                  ),
+                                "Ticket finalizado e sincronização registrada.",
+                              )
+                            }
+                          />
+                        }
+                      >
+                        Confirmar conclusão
+                      </DialogClose>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
+              </CardFooter>
+            </Card>
+          )}
         </div>
       </div>
     </div>

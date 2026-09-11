@@ -18,6 +18,28 @@ import { prisma } from "@/lib/prisma";
 
 export { addTicketHistory };
 
+function stageFromPayload(payload: Prisma.JsonValue) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return null;
+  }
+  const stage = (payload as Record<string, unknown>).stage;
+  return typeof stage === "string" ? stage : null;
+}
+
+function stageIsReady(
+  payload: Prisma.JsonValue,
+  expectedStage: "INTERNAL_APPROVAL" | "DEVIATION_REVIEW",
+  resolutionCycle: number,
+) {
+  if (stageFromPayload(payload) !== expectedStage) return false;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    return false;
+  }
+  return (
+    (payload as Record<string, unknown>).resolutionCycle === resolutionCycle
+  );
+}
+
 export const ticketInclude = {
   assignee: { select: { id: true, name: true, email: true } },
   costCenter: { select: { id: true, code: true, name: true, active: true } },
@@ -92,6 +114,7 @@ export const ticketInclude = {
       event: true,
       direction: true,
       status: true,
+      payload: true,
       attempts: true,
       lastError: true,
       createdAt: true,
@@ -105,6 +128,7 @@ export async function startTicketWork(
   ticketId: string,
   userId: string,
   requestKey: string,
+  contactMessage?: string,
 ) {
   let result: {
     period: TicketWorkPeriod;
@@ -112,6 +136,7 @@ export async function startTicketWork(
   };
   try {
     result = await prisma.$transaction(async (tx) => {
+      const normalizedContactMessage = contactMessage?.trim() || null;
       const ticket = await tx.ticket.findUnique({ where: { id: ticketId } });
       if (!ticket)
         throw new ApiError(404, "TICKET_NOT_FOUND", "Ticket não encontrado.");
@@ -126,9 +151,27 @@ export async function startTicketWork(
             "Esta chave já iniciou outro período de trabalho.",
           );
         }
-        const contactKey = zeevProcessTasks().contact
-          ? `zeev:${ticket.externalReference}:contact:${replay.cycle}`
-          : null;
+        if (normalizedContactMessage) {
+          const contactRecord = await tx.ticketComment.findUnique({
+            where: { requestKey: `contact:${requestKey}` },
+          });
+          if (
+            !contactRecord ||
+            contactRecord.ticketId !== ticketId ||
+            contactRecord.authorId !== userId ||
+            contactRecord.body !== normalizedContactMessage
+          ) {
+            throw new ApiError(
+              409,
+              "IDEMPOTENCY_CONFLICT",
+              "Esta chave já iniciou outro contato inicial.",
+            );
+          }
+        }
+        const contactKey =
+          replay.cycle === 1 && zeevProcessTasks().contact
+            ? `zeev:${ticket.externalReference}:contact:${replay.cycle}`
+            : null;
         return { period: replay, queuedContactKey: contactKey };
       }
       if (
@@ -142,15 +185,54 @@ export async function startTicketWork(
           "Este ticket não aceita novos períodos de trabalho.",
         );
       }
+      if (
+        ticket.status === TicketStatus.NEW ||
+        ticket.status === TicketStatus.TRIAGE
+      ) {
+        throw new ApiError(
+          409,
+          "TRIAGE_REQUIRED",
+          "Aprove a triagem antes de iniciar o atendimento.",
+        );
+      }
+      const mustSyncInitialContact = Boolean(
+        ticket.externalInstanceId && ticket.resolutionCycle === 1,
+      );
+      if (mustSyncInitialContact) {
+        const triageSync = await tx.syncExecution.findFirst({
+          where: {
+            ticketId,
+            event: "ticket.triage_approved",
+            direction: SyncDirection.OUTBOUND,
+          },
+          orderBy: { createdAt: "desc" },
+          select: { status: true },
+        });
+        if (triageSync?.status !== SyncStatus.SUCCEEDED) {
+          throw new ApiError(
+            409,
+            "ZEEV_TRIAGE_SYNC_PENDING",
+            "A triagem ainda não foi concluída no Zeev. Corrija ou tente novamente a sincronização antes de registrar o contato inicial.",
+          );
+        }
+      }
+      if (mustSyncInitialContact && !zeevProcessTasks().contact) {
+        throw new ApiError(
+          422,
+          "ZEEV_CONTACT_TASK_NOT_CONFIGURED",
+          "Configure ZEEV_TASK_CONTACT_CODE antes de registrar o contato inicial de tickets do Zeev.",
+        );
+      }
 
       const existing = await tx.ticketWorkPeriod.findFirst({
         where: { userId, endedAt: null },
       });
       if (existing) {
         if (existing.ticketId === ticketId) {
-          const contactKey = zeevProcessTasks().contact
-            ? `zeev:${ticket.externalReference}:contact:${existing.cycle}`
-            : null;
+          const contactKey =
+            existing.cycle === 1 && zeevProcessTasks().contact
+              ? `zeev:${ticket.externalReference}:contact:${existing.cycle}`
+              : null;
           return { period: existing, queuedContactKey: contactKey };
         }
         throw new ApiError(
@@ -169,6 +251,28 @@ export async function startTicketWork(
           startRequestKey: requestKey,
         },
       });
+      if (normalizedContactMessage) {
+        await tx.ticketComment.create({
+          data: {
+            ticketId,
+            authorId: userId,
+            body: normalizedContactMessage,
+            internal: false,
+            requestKey: `contact:${requestKey}`,
+          },
+        });
+        await addTicketHistory(tx, {
+          ticketId,
+          action: "INITIAL_CONTACT_RECORDED",
+          actorId: userId,
+          fromStatus: ticket.status,
+          toStatus: TicketStatus.IN_PROGRESS,
+          details: {
+            message: normalizedContactMessage,
+            synchronizedWithZeev: Boolean(ticket.externalInstanceId),
+          },
+        });
+      }
       await tx.ticket.update({
         where: { id: ticketId },
         data: {
@@ -186,7 +290,7 @@ export async function startTicketWork(
         details: { requestKey, workPeriodId: period.id },
       });
       const contactKey = `zeev:${ticket.externalReference}:contact:${ticket.resolutionCycle}`;
-      if (zeevProcessTasks().contact) {
+      if (mustSyncInitialContact) {
         await tx.syncExecution.upsert({
           where: { idempotencyKey: contactKey },
           create: {
@@ -200,6 +304,9 @@ export async function startTicketWork(
               instanceId: ticket.externalInstanceId,
               assignmentId: ticket.zeevAssignmentId,
               resolutionCycle: ticket.resolutionCycle,
+              contactMessage:
+                normalizedContactMessage ??
+                "Contato inicial iniciado pelo Help Desk.",
             },
           },
           update: {},
@@ -260,6 +367,173 @@ export async function startTicketWork(
   const { period, queuedContactKey } = result;
   if (queuedContactKey) await queueZeevSync(queuedContactKey);
   return period;
+}
+
+export async function approveTicketTriage(input: {
+  ticketId: string;
+  actorId: string;
+  assigneeId: string;
+  reason?: string;
+  version: number;
+  requestKey: string;
+}) {
+  const result = await prisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findUnique({
+      where: { id: input.ticketId },
+    });
+    if (!ticket)
+      throw new ApiError(404, "TICKET_NOT_FOUND", "Ticket não encontrado.");
+
+    const existingRequest = await tx.syncExecution.findUnique({
+      where: { idempotencyKey: input.requestKey },
+    });
+    if (existingRequest) {
+      if (
+        existingRequest.ticketId !== ticket.id ||
+        existingRequest.event !== "ticket.triage_approved"
+      ) {
+        throw new ApiError(
+          409,
+          "IDEMPOTENCY_CONFLICT",
+          "Esta chave já foi usada em outra aprovação de triagem.",
+        );
+      }
+      return { ticket, syncKey: existingRequest.idempotencyKey };
+    }
+
+    if (
+      ticket.status !== TicketStatus.NEW &&
+      ticket.status !== TicketStatus.TRIAGE
+    ) {
+      throw new ApiError(
+        409,
+        "TRIAGE_ALREADY_COMPLETED",
+        "A triagem deste ticket já foi concluída.",
+      );
+    }
+    if (ticket.version !== input.version) {
+      throw new ApiError(
+        409,
+        "VERSION_CONFLICT",
+        "O ticket foi alterado. Atualize a página.",
+      );
+    }
+
+    const assignee = await tx.userRef.findUnique({
+      where: { id: input.assigneeId },
+      select: { id: true, active: true },
+    });
+    if (!assignee?.active) {
+      throw new ApiError(
+        422,
+        "ASSIGNEE_INVALID",
+        "O responsável precisa estar ativo.",
+      );
+    }
+
+    const claimed = await tx.ticket.updateMany({
+      where: {
+        id: ticket.id,
+        version: input.version,
+        status: { in: [TicketStatus.NEW, TicketStatus.TRIAGE] },
+      },
+      data: {
+        assigneeId: assignee.id,
+        status: TicketStatus.IN_PROGRESS,
+        version: { increment: 1 },
+      },
+    });
+    if (claimed.count !== 1) {
+      throw new ApiError(
+        409,
+        "VERSION_CONFLICT",
+        "O ticket foi alterado. Atualize a página.",
+      );
+    }
+
+    if (ticket.assigneeId && ticket.assigneeId !== assignee.id) {
+      await tx.ticketParticipant.updateMany({
+        where: {
+          ticketId: ticket.id,
+          userId: ticket.assigneeId,
+          role: "PRIMARY",
+          removedAt: null,
+        },
+        data: { removedAt: new Date() },
+      });
+    }
+    const primaryParticipant = await tx.ticketParticipant.findFirst({
+      where: {
+        ticketId: ticket.id,
+        userId: assignee.id,
+        role: "PRIMARY",
+        removedAt: null,
+      },
+    });
+    if (!primaryParticipant) {
+      await tx.ticketParticipant.create({
+        data: {
+          ticketId: ticket.id,
+          userId: assignee.id,
+          role: "PRIMARY",
+          addedById: input.actorId,
+        },
+      });
+    }
+
+    const updated = await tx.ticket.findUniqueOrThrow({
+      where: { id: ticket.id },
+    });
+    await addTicketHistory(tx, {
+      ticketId: ticket.id,
+      action: "TRIAGE_APPROVED_IN_HELP_DESK",
+      actorId: input.actorId,
+      fromStatus: ticket.status,
+      toStatus: updated.status,
+      details: {
+        assigneeId: assignee.id,
+        reason: input.reason?.trim() || null,
+        checklist: {
+          classificationConfirmed: true,
+          assignmentConfirmed: true,
+        },
+      },
+    });
+
+    if (!ticket.externalInstanceId) return { ticket: updated, syncKey: null };
+
+    if (!zeevProcessTasks().triage) {
+      throw new ApiError(
+        422,
+        "ZEEV_TRIAGE_TASK_NOT_CONFIGURED",
+        "Configure ZEEV_TASK_TRIAGE_CODE antes de aprovar a triagem de tickets do Zeev.",
+      );
+    }
+    const syncKey = `zeev:${ticket.externalReference}:triage:${ticket.resolutionCycle}`;
+    await tx.syncExecution.upsert({
+      where: { idempotencyKey: syncKey },
+      create: {
+        ticketId: ticket.id,
+        idempotencyKey: syncKey,
+        event: "ticket.triage_approved",
+        direction: SyncDirection.OUTBOUND,
+        status: SyncStatus.PENDING,
+        payload: {
+          instanceId: ticket.externalInstanceId,
+          externalReference: ticket.externalReference,
+          assigneeId: assignee.id,
+          reason: input.reason?.trim() || null,
+          resolutionCycle: ticket.resolutionCycle,
+          requestKey: input.requestKey,
+        },
+      },
+      update: {},
+    });
+    return { ticket: updated, syncKey };
+  });
+
+  if (result.syncKey) await queueZeevSync(result.syncKey);
+  return result.ticket;
 }
 
 export async function stopTicketWork(
@@ -423,15 +697,11 @@ export async function resolveTicket(input: {
       where: { id: replay.ticketId },
     });
     if (replayTicket) {
-      const tasks = zeevProcessTasks();
       await queueZeevSyncChain([
-        tasks.contact
+        replayTicket.resolutionCycle === 1 && zeevProcessTasks().contact
           ? `zeev:${replayTicket.externalReference}:contact:${replayTicket.resolutionCycle}`
           : null,
         input.requestKey,
-        tasks.approve
-          ? `zeev:${replayTicket.externalReference}:approve:${replayTicket.resolutionCycle}`
-          : null,
       ]);
       return replayTicket;
     }
@@ -456,16 +726,30 @@ export async function resolveTicket(input: {
       return {
         ticket,
         resolveKey: existingResolution?.idempotencyKey ?? null,
-        approveKey: zeevProcessTasks().approve
-          ? `zeev:${ticket.externalReference}:approve:${ticket.resolutionCycle}`
-          : null,
       };
+    }
+    if (
+      ticket.status === TicketStatus.REOPENED_LOW_SCORE &&
+      ticket.externalInstanceId
+    ) {
+      throw new ApiError(
+        409,
+        "ZEEV_DEVIATION_REVIEW_REQUIRED",
+        "Este ticket recebeu avaliação baixa. Use a revisão de desvio para sincronizar a próxima decisão com o Zeev.",
+      );
     }
     if (ticket.version !== input.version) {
       throw new ApiError(
         409,
         "VERSION_CONFLICT",
         "O ticket foi alterado por outra pessoa. Atualize a página.",
+      );
+    }
+    if (ticket.externalInstanceId && !zeevProcessTasks().service) {
+      throw new ApiError(
+        422,
+        "ZEEV_SERVICE_TASK_NOT_CONFIGURED",
+        "Configure ZEEV_TASK_SERVICE_CODE antes de finalizar tickets do Zeev.",
       );
     }
 
@@ -478,7 +762,7 @@ export async function resolveTicket(input: {
     const updated = await tx.ticket.update({
       where: { id: ticket.id },
       data: {
-        status: TicketStatus.RESOLVED,
+        status: TicketStatus.WAITING_APPROVAL,
         resolutionSummary: input.resolutionSummary,
         resolvedAt: new Date(),
         assigneeId: ticket.assigneeId ?? input.userId,
@@ -490,7 +774,7 @@ export async function resolveTicket(input: {
       action: "RESOLVED_IN_HELP_DESK",
       actorId: input.userId,
       fromStatus: ticket.status,
-      toStatus: TicketStatus.RESOLVED,
+      toStatus: TicketStatus.WAITING_APPROVAL,
       details: { resolutionSummary: input.resolutionSummary },
     });
     const publicComments = await tx.ticketComment.findMany({
@@ -525,35 +809,259 @@ export async function resolveTicket(input: {
       },
       update: {},
     });
-    const approveKey = zeevProcessTasks().approve
-      ? `zeev:${ticket.externalReference}:approve:${ticket.resolutionCycle}`
-      : null;
-    if (approveKey) {
-      await tx.syncExecution.upsert({
-        where: { idempotencyKey: approveKey },
-        create: {
-          ticketId: ticket.id,
-          idempotencyKey: approveKey,
-          event: "ticket.internal_approved",
-          direction: SyncDirection.OUTBOUND,
-          status: SyncStatus.PENDING,
-          payload: {
-            externalReference: ticket.externalReference,
-            instanceId: ticket.externalInstanceId,
-            resolutionSummary: input.resolutionSummary,
-            resolutionCycle: ticket.resolutionCycle,
-          },
-        },
-        update: {},
-      });
-    }
-    return { ticket: updated, resolveKey: input.requestKey, approveKey };
+    return { ticket: updated, resolveKey: input.requestKey };
   });
 
-  const contactKey = zeevProcessTasks().contact
-    ? `zeev:${result.ticket.externalReference}:contact:${result.ticket.resolutionCycle}`
-    : null;
-  await queueZeevSyncChain([contactKey, result.resolveKey, result.approveKey]);
+  const contactKey =
+    result.ticket.resolutionCycle === 1 && zeevProcessTasks().contact
+      ? `zeev:${result.ticket.externalReference}:contact:${result.ticket.resolutionCycle}`
+      : null;
+  await queueZeevSyncChain([contactKey, result.resolveKey]);
+  return result.ticket;
+}
+
+export async function approveTicketConclusion(input: {
+  ticketId: string;
+  userId: string;
+  version: number;
+  requestKey: string;
+}) {
+  const result = await prisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findUnique({
+      where: { id: input.ticketId },
+    });
+    if (!ticket) {
+      throw new ApiError(404, "TICKET_NOT_FOUND", "Ticket não encontrado.");
+    }
+
+    const syncKey = ticket.externalInstanceId
+      ? `zeev:${ticket.externalReference}:approve:${ticket.resolutionCycle}`
+      : null;
+    if (syncKey) {
+      const replay = await tx.syncExecution.findUnique({
+        where: { idempotencyKey: syncKey },
+      });
+      if (replay) {
+        if (
+          replay.ticketId !== ticket.id ||
+          replay.event !== "ticket.internal_approved"
+        ) {
+          throw new ApiError(
+            409,
+            "IDEMPOTENCY_CONFLICT",
+            "A aprovação desta conclusão já está vinculada a outra operação.",
+          );
+        }
+        return { ticket, syncKey };
+      }
+    }
+
+    if (ticket.status !== TicketStatus.WAITING_APPROVAL) {
+      throw new ApiError(
+        409,
+        "TICKET_NOT_WAITING_APPROVAL",
+        "Este ticket não está aguardando aprovação da conclusão.",
+      );
+    }
+    if (ticket.version !== input.version) {
+      throw new ApiError(
+        409,
+        "VERSION_CONFLICT",
+        "O ticket foi alterado por outra pessoa. Atualize a página.",
+      );
+    }
+    if (ticket.externalInstanceId && !zeevProcessTasks().approve) {
+      throw new ApiError(
+        422,
+        "ZEEV_APPROVE_TASK_NOT_CONFIGURED",
+        "Configure ZEEV_TASK_APPROVE_CODE antes de aprovar a conclusão de tickets do Zeev.",
+      );
+    }
+
+    const stageReady = await tx.syncExecution.findMany({
+      where: {
+        ticketId: ticket.id,
+        event: "ticket.stage_ready",
+        direction: SyncDirection.INBOUND,
+      },
+      orderBy: { createdAt: "desc" },
+      select: { payload: true },
+    });
+    if (
+      ticket.externalInstanceId &&
+      !stageReady.some((item) =>
+        stageIsReady(item.payload, "INTERNAL_APPROVAL", ticket.resolutionCycle),
+      )
+    ) {
+      throw new ApiError(
+        409,
+        "ZEEV_APPROVAL_NOT_READY",
+        "A tarefa Aprovar conclusão ainda não está pronta no Zeev.",
+      );
+    }
+
+    const updated = await tx.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        status: TicketStatus.RESOLVED,
+        version: { increment: 1 },
+      },
+    });
+    await addTicketHistory(tx, {
+      ticketId: ticket.id,
+      action: "INTERNAL_APPROVAL_CONFIRMED",
+      actorId: input.userId,
+      fromStatus: ticket.status,
+      toStatus: TicketStatus.RESOLVED,
+      details: { resolutionCycle: ticket.resolutionCycle },
+    });
+
+    if (!ticket.externalInstanceId) return { ticket: updated, syncKey: null };
+    if (!syncKey) return { ticket: updated, syncKey: null };
+    await tx.syncExecution.upsert({
+      where: { idempotencyKey: syncKey },
+      create: {
+        ticketId: ticket.id,
+        idempotencyKey: syncKey,
+        event: "ticket.internal_approved",
+        direction: SyncDirection.OUTBOUND,
+        status: SyncStatus.PENDING,
+        payload: {
+          externalReference: ticket.externalReference,
+          instanceId: ticket.externalInstanceId,
+          resolutionSummary: ticket.resolutionSummary,
+          resolutionCycle: ticket.resolutionCycle,
+          requestKey: input.requestKey,
+        },
+      },
+      update: {},
+    });
+    return { ticket: updated, syncKey };
+  });
+
+  if (result.syncKey) await queueZeevSync(result.syncKey);
+  return result.ticket;
+}
+
+export async function reviewTicketDeviation(input: {
+  ticketId: string;
+  userId: string;
+  action: "REQUEST_REEVALUATION" | "CLOSE_TICKET";
+  version: number;
+  requestKey: string;
+}) {
+  const result = await prisma.$transaction(async (tx) => {
+    const ticket = await tx.ticket.findUnique({
+      where: { id: input.ticketId },
+    });
+    if (!ticket) {
+      throw new ApiError(404, "TICKET_NOT_FOUND", "Ticket não encontrado.");
+    }
+    const syncKey = ticket.externalInstanceId
+      ? `zeev:${ticket.externalReference}:deviation:${ticket.resolutionCycle}`
+      : null;
+    if (syncKey) {
+      const replay = await tx.syncExecution.findUnique({
+        where: { idempotencyKey: syncKey },
+      });
+      if (replay) {
+        if (
+          replay.ticketId !== ticket.id ||
+          replay.event !== "ticket.deviation_reviewed"
+        ) {
+          throw new ApiError(
+            409,
+            "IDEMPOTENCY_CONFLICT",
+            "A revisão deste desvio já está vinculada a outra operação.",
+          );
+        }
+        return { ticket, syncKey };
+      }
+    }
+    if (ticket.status !== TicketStatus.REOPENED_LOW_SCORE) {
+      throw new ApiError(
+        409,
+        "TICKET_NOT_REOPENED",
+        "Este ticket não está aguardando revisão de desvio.",
+      );
+    }
+    if (ticket.version !== input.version) {
+      throw new ApiError(
+        409,
+        "VERSION_CONFLICT",
+        "O ticket foi alterado por outra pessoa. Atualize a página.",
+      );
+    }
+    if (ticket.externalInstanceId && !zeevProcessTasks().deviation) {
+      throw new ApiError(
+        422,
+        "ZEEV_DEVIATION_TASK_NOT_CONFIGURED",
+        "Configure ZEEV_TASK_DEVIATION_CODE antes de revisar desvios de tickets do Zeev.",
+      );
+    }
+    const stages = await tx.syncExecution.findMany({
+      where: {
+        ticketId: ticket.id,
+        event: "ticket.stage_ready",
+        direction: SyncDirection.INBOUND,
+      },
+      orderBy: { createdAt: "desc" },
+      select: { payload: true },
+    });
+    if (
+      ticket.externalInstanceId &&
+      !stages.some((item) =>
+        stageIsReady(item.payload, "DEVIATION_REVIEW", ticket.resolutionCycle),
+      )
+    ) {
+      throw new ApiError(
+        409,
+        "ZEEV_DEVIATION_NOT_READY",
+        "A tarefa Verificar desvio ainda não está pronta no Zeev.",
+      );
+    }
+
+    const isClosing = input.action === "CLOSE_TICKET";
+    const updated = await tx.ticket.update({
+      where: { id: ticket.id },
+      data: {
+        status: isClosing ? TicketStatus.CLOSED : TicketStatus.RESOLVED,
+        closedAt: isClosing ? new Date() : null,
+        version: { increment: 1 },
+      },
+    });
+    await addTicketHistory(tx, {
+      ticketId: ticket.id,
+      action: "DEVIATION_REVIEWED",
+      actorId: input.userId,
+      fromStatus: ticket.status,
+      toStatus: updated.status,
+      details: {
+        action: input.action,
+        resolutionCycle: ticket.resolutionCycle,
+      },
+    });
+    if (!syncKey) return { ticket: updated, syncKey: null };
+    await tx.syncExecution.create({
+      data: {
+        ticketId: ticket.id,
+        idempotencyKey: syncKey,
+        event: "ticket.deviation_reviewed",
+        direction: SyncDirection.OUTBOUND,
+        status: SyncStatus.PENDING,
+        payload: {
+          instanceId: ticket.externalInstanceId,
+          externalReference: ticket.externalReference,
+          action: input.action,
+          resolutionCycle: ticket.resolutionCycle,
+          requestKey: input.requestKey,
+        },
+      },
+    });
+    return { ticket: updated, syncKey };
+  });
+
+  if (result.syncKey) await queueZeevSync(result.syncKey);
   return result.ticket;
 }
 
@@ -569,6 +1077,47 @@ export async function queueZeevSyncChain(keys: Array<string | null>) {
   if (uniqueKeys.length === 0) return;
   const { enqueueZeevSync } = await import("@/lib/jobs/zeev-sync-queue");
   await enqueueZeevSync(uniqueKeys);
+}
+
+export async function retryTicketZeevSync(input: {
+  ticketId: string;
+  executionId: string;
+}) {
+  const execution = await prisma.$transaction(async (tx) => {
+    const existing = await tx.syncExecution.findFirst({
+      where: {
+        id: input.executionId,
+        ticketId: input.ticketId,
+        direction: SyncDirection.OUTBOUND,
+      },
+      select: { id: true, idempotencyKey: true, status: true },
+    });
+    if (!existing) {
+      throw new ApiError(
+        404,
+        "SYNC_EXECUTION_NOT_FOUND",
+        "Sincronização de saída não encontrada para este ticket.",
+      );
+    }
+    if (existing.status === SyncStatus.SUCCEEDED) {
+      throw new ApiError(
+        409,
+        "SYNC_ALREADY_SUCCEEDED",
+        "Esta etapa já foi sincronizada com o Zeev.",
+      );
+    }
+    return tx.syncExecution.update({
+      where: { id: existing.id },
+      data: { status: SyncStatus.PENDING, attempts: 0, lastError: null },
+      select: { idempotencyKey: true },
+    });
+  });
+
+  // A person deliberately requested this retry. Dispatch it now instead of
+  // inheriting pg-boss's delayed exponential backoff from the prior failure.
+  // The durable outbox continues to retain the result when the remote API is
+  // unavailable, so no state is lost if this immediate attempt also fails.
+  return dispatchPendingZeevSync(execution.idempotencyKey);
 }
 
 export async function dispatchPendingZeevSync(idempotencyKey: string) {

@@ -1,12 +1,20 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { TicketStatus, UserRole } from "@prisma/client";
+import {
+  SyncDirection,
+  SyncStatus,
+  TicketStatus,
+  UserRole,
+} from "@prisma/client";
 
 import {
   receiveZeevEvaluation,
+  receiveZeevStageReady,
   receiveZeevTicket,
 } from "@/lib/domain/integrations";
 import {
+  approveTicketConclusion,
+  reviewTicketDeviation,
   resolveTicket,
   startTicketWork,
   stopTicketWork,
@@ -26,6 +34,10 @@ const runId = randomUUID();
 const userId = randomUUID();
 const externalReference = `TEST-${runId}`;
 const costCenterCode = `T${runId.slice(0, 7)}`;
+const previousContactTaskCode = process.env.ZEEV_TASK_CONTACT_CODE;
+const previousServiceTaskCode = process.env.ZEEV_TASK_SERVICE_CODE;
+const previousApproveTaskCode = process.env.ZEEV_TASK_APPROVE_CODE;
+const previousDeviationTaskCode = process.env.ZEEV_TASK_DEVIATION_CODE;
 
 describe.runIf(Boolean(process.env.DATABASE_URL))(
   "fluxo integrado com PostgreSQL",
@@ -36,6 +48,10 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
 
     beforeAll(async () => {
       process.env.ZEEV_CALLBACK_URL = "";
+      process.env.ZEEV_TASK_CONTACT_CODE = "contact-test";
+      process.env.ZEEV_TASK_SERVICE_CODE = "service-test";
+      process.env.ZEEV_TASK_APPROVE_CODE = "approve-test";
+      process.env.ZEEV_TASK_DEVIATION_CODE = "deviation-test";
       await prisma.userRef.create({
         data: {
           id: userId,
@@ -85,6 +101,26 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
         where: { id: privateProjectId },
       });
       await prisma.userRef.deleteMany({ where: { id: userId } });
+      if (previousContactTaskCode === undefined) {
+        delete process.env.ZEEV_TASK_CONTACT_CODE;
+      } else {
+        process.env.ZEEV_TASK_CONTACT_CODE = previousContactTaskCode;
+      }
+      if (previousServiceTaskCode === undefined) {
+        delete process.env.ZEEV_TASK_SERVICE_CODE;
+      } else {
+        process.env.ZEEV_TASK_SERVICE_CODE = previousServiceTaskCode;
+      }
+      if (previousApproveTaskCode === undefined) {
+        delete process.env.ZEEV_TASK_APPROVE_CODE;
+      } else {
+        process.env.ZEEV_TASK_APPROVE_CODE = previousApproveTaskCode;
+      }
+      if (previousDeviationTaskCode === undefined) {
+        delete process.env.ZEEV_TASK_DEVIATION_CODE;
+      } else {
+        process.env.ZEEV_TASK_DEVIATION_CODE = previousDeviationTaskCode;
+      }
       await prisma.$disconnect();
     });
 
@@ -115,14 +151,43 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
       expect(replay.replay).toBe(true);
       expect(replay.ticket.id).toBe(first.ticket.id);
       expect(first.ticket.costCenterId).toBe(costCenterId);
+      expect(first.ticket.status).toBe(TicketStatus.TRIAGE);
+
+      // The API-level triage approval is covered separately. Advance this
+      // end-to-end scenario to the post-triage state so it can exercise work,
+      // resolution, evaluation and automatic time-entry consolidation.
+      await prisma.ticket.update({
+        where: { id: ticketId },
+        data: {
+          status: TicketStatus.IN_PROGRESS,
+          assigneeId: userId,
+          version: { increment: 1 },
+        },
+      });
+      await prisma.syncExecution.create({
+        data: {
+          ticketId,
+          idempotencyKey: `zeev:${externalReference}:triage:1`,
+          event: "ticket.triage_approved",
+          direction: SyncDirection.OUTBOUND,
+          status: SyncStatus.SUCCEEDED,
+          payload: { resolutionCycle: 1 },
+        },
+      });
     });
 
     it("consolida períodos uma vez e aceita finalização repetida", async () => {
+      const contactMessage = "Contato realizado e atendimento iniciado.";
       const [period, replayStart] = await Promise.all([
-        startTicketWork(ticketId, userId, `work:${runId}`),
-        startTicketWork(ticketId, userId, `work:${runId}`),
+        startTicketWork(ticketId, userId, `work:${runId}`, contactMessage),
+        startTicketWork(ticketId, userId, `work:${runId}`, contactMessage),
       ]);
       expect(replayStart.id).toBe(period.id);
+      await expect(
+        prisma.ticketComment.findFirstOrThrow({
+          where: { ticketId, body: contactMessage, internal: false },
+        }),
+      ).resolves.toMatchObject({ authorId: userId });
       await stopTicketWork(ticketId, userId, `work-stop:${runId}`);
       const replayStop = await stopTicketWork(
         ticketId,
@@ -155,10 +220,40 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
       const entries = await prisma.timeEntry.findMany({
         where: { ticketId, userId },
       });
-      expect(first.status).toBe(TicketStatus.RESOLVED);
+      expect(first.status).toBe(TicketStatus.WAITING_APPROVAL);
       expect(replay.id).toBe(first.id);
       expect(entries).toHaveLength(1);
       expect(entries[0].durationSeconds).toBe(60);
+
+      await receiveZeevStageReady({
+        schemaVersion: "1.0",
+        event: "ticket.stage_ready",
+        idempotencyKey: `zeev:${runId}:approval-ready:1`,
+        source: {
+          system: "zeev",
+          processName: "Abertura de Ticket T.I",
+          instanceId: runId,
+        },
+        ticket: { externalReference },
+        stage: "INTERNAL_APPROVAL",
+      });
+      const waitingApproval = await prisma.ticket.findUniqueOrThrow({
+        where: { id: ticketId },
+      });
+      const approved = await approveTicketConclusion({
+        ticketId,
+        userId,
+        version: waitingApproval.version,
+        requestKey: `zeev:${runId}:approve:1`,
+      });
+      expect(approved.status).toBe(TicketStatus.RESOLVED);
+      const approvalReplay = await approveTicketConclusion({
+        ticketId,
+        userId,
+        version: waitingApproval.version,
+        requestKey: `zeev:${runId}:approve:replay`,
+      });
+      expect(approvalReplay.id).toBe(ticketId);
     });
 
     it("roteia avaliação baixa ao responsável em novo ciclo", async () => {
@@ -184,28 +279,30 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
       ).toBe(1);
     });
 
-    it("preserva a avaliação anterior quando o ticket é concluído novamente", async () => {
-      const period = await startTicketWork(
-        ticketId,
-        userId,
-        `work-cycle-2:${runId}`,
-      );
-      await stopTicketWork(ticketId, userId, `work-cycle-2-stop:${runId}`);
-      await prisma.ticketWorkPeriod.update({
-        where: { id: period.id },
-        data: { endedAt: new Date(period.startedAt.getTime() + 45_000) },
+    it("sincroniza a revisão de desvio antes de solicitar nova avaliação", async () => {
+      await receiveZeevStageReady({
+        schemaVersion: "1.0",
+        event: "ticket.stage_ready",
+        idempotencyKey: `zeev:${runId}:deviation-ready:2`,
+        source: {
+          system: "zeev",
+          processName: "Abertura de Ticket T.I",
+          instanceId: runId,
+        },
+        ticket: { externalReference },
+        stage: "DEVIATION_REVIEW",
       });
-
       const current = await prisma.ticket.findUniqueOrThrow({
         where: { id: ticketId },
       });
-      await resolveTicket({
+      const reviewed = await reviewTicketDeviation({
         ticketId,
         userId,
-        resolutionSummary: "Correção validada após a reabertura.",
+        action: "REQUEST_REEVALUATION",
         version: current.version,
-        requestKey: `zeev:${runId}:resolve:2`,
+        requestKey: `zeev:${runId}:deviation:2`,
       });
+      expect(reviewed.status).toBe(TicketStatus.RESOLVED);
 
       const payload = {
         externalReference,

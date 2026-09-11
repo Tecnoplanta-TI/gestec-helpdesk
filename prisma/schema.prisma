@@ -46,6 +46,13 @@ enum TimeEntryStatus {
   VOIDED
 }
 
+enum NotificationPriority {
+  LOW
+  NORMAL
+  HIGH
+  URGENT
+}
+
 enum ProjectKind {
   COST_CENTER
   MANUAL
@@ -90,17 +97,23 @@ model UserRef {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  assignedTickets     Ticket[]            @relation("TicketAssignee")
-  requestedTickets    Ticket[]            @relation("TicketRequester")
-  comments            TicketComment[]
-  workPeriods         TicketWorkPeriod[]
-  timeEntries         TimeEntry[]
-  activeTimer         ActiveTimer?
-  auditEvents         AuditEvent[]
-  participations      TicketParticipant[]
-  addedParticipations TicketParticipant[] @relation("ParticipantAddedBy")
-  attachments         TicketAttachment[]
-  linkedAssets        TicketAsset[]
+  assignedTickets      Ticket[]            @relation("TicketAssignee")
+  requestedTickets     Ticket[]            @relation("TicketRequester")
+  comments             TicketComment[]
+  workPeriods          TicketWorkPeriod[]
+  timeEntries          TimeEntry[]
+  activeTimer          ActiveTimer?
+  auditEvents          AuditEvent[]
+  participations       TicketParticipant[]
+  addedParticipations  TicketParticipant[] @relation("ParticipantAddedBy")
+  attachments          TicketAttachment[]
+  linkedAssets         TicketAsset[]
+  managedUserGroups    UserGroup[]         @relation("UserGroupManager")
+  userGroupMemberships UserGroupMember[]
+  individualTimeGoals  TimeGoal[]          @relation("TimeGoalUser")
+  createdTimeGoals     TimeGoal[]          @relation("TimeGoalCreator")
+  createdHourlyRates   ProjectHourlyRate[]
+  notifications        Notification[]
 }
 
 model CostCenter {
@@ -112,9 +125,11 @@ model CostCenter {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
-  tickets      Ticket[]
-  timeEntries  TimeEntry[]
-  activeTimers ActiveTimer[]
+  tickets        Ticket[]
+  timeEntries    TimeEntry[]
+  activeTimers   ActiveTimer[]
+  manualProjects ManualProject[] @relation("ProjectClient")
+  timeGoals      TimeGoal[]
 
   @@index([active, name])
 }
@@ -148,6 +163,7 @@ model Service {
 
 model ManualProject {
   id                String   @id @default(uuid()) @db.Uuid
+  costCenterId      String?  @db.Uuid
   name              String
   normalizedName    String   @unique
   color             String
@@ -159,8 +175,102 @@ model ManualProject {
 
   timeEntries  TimeEntry[]
   activeTimers ActiveTimer[]
+  client       CostCenter?         @relation("ProjectClient", fields: [costCenterId], references: [id], onDelete: SetNull)
+  hourlyRates  ProjectHourlyRate[]
+  timeGoals    TimeGoal[]
 
   @@index([active, name])
+  @@index([costCenterId, active, name])
+}
+
+model ProjectHourlyRate {
+  id              String   @id @default(uuid()) @db.Uuid
+  manualProjectId String   @db.Uuid
+  amountCents     Int
+  effectiveFrom   DateTime @db.Date
+  createdById     String   @db.Uuid
+  createdAt       DateTime @default(now())
+
+  project   ManualProject @relation(fields: [manualProjectId], references: [id], onDelete: Restrict)
+  createdBy UserRef       @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@unique([manualProjectId, effectiveFrom])
+  @@index([manualProjectId, effectiveFrom])
+}
+
+model UserGroup {
+  id             String   @id @default(uuid()) @db.Uuid
+  name           String
+  normalizedName String   @unique
+  managerId      String?  @db.Uuid
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  manager   UserRef?          @relation("UserGroupManager", fields: [managerId], references: [id], onDelete: SetNull)
+  members   UserGroupMember[]
+  timeGoals TimeGoal[]
+
+  @@index([active, name])
+  @@index([managerId, active])
+}
+
+model UserGroupMember {
+  userGroupId String   @db.Uuid
+  userId      String   @db.Uuid
+  createdAt   DateTime @default(now())
+
+  group UserGroup @relation(fields: [userGroupId], references: [id], onDelete: Cascade)
+  user  UserRef   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userGroupId, userId])
+  @@index([userId, userGroupId])
+}
+
+model TimeGoal {
+  id              String   @id @default(uuid()) @db.Uuid
+  title           String
+  targetSeconds   Int
+  startsOn        DateTime @db.Date
+  endsOn          DateTime @db.Date
+  active          Boolean  @default(true)
+  targetUserId    String?  @db.Uuid
+  targetGroupId   String?  @db.Uuid
+  manualProjectId String?  @db.Uuid
+  costCenterId    String?  @db.Uuid
+  createdById     String   @db.Uuid
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  targetUser  UserRef?       @relation("TimeGoalUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  targetGroup UserGroup?     @relation(fields: [targetGroupId], references: [id], onDelete: Cascade)
+  project     ManualProject? @relation(fields: [manualProjectId], references: [id], onDelete: SetNull)
+  client      CostCenter?    @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
+  createdBy   UserRef        @relation("TimeGoalCreator", fields: [createdById], references: [id], onDelete: Restrict)
+
+  @@index([targetUserId, active, startsOn, endsOn])
+  @@index([targetGroupId, active, startsOn, endsOn])
+  @@index([manualProjectId, costCenterId])
+}
+
+model Notification {
+  id           String               @id @default(uuid()) @db.Uuid
+  recipientId  String               @db.Uuid
+  title        String
+  description  String
+  source       String
+  priority     NotificationPriority @default(NORMAL)
+  resourceType String?
+  resourceId   String?
+  href         String?
+  readAt       DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  recipient UserRef @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, readAt, createdAt])
+  @@index([recipientId, source, createdAt])
 }
 
 model Ticket {

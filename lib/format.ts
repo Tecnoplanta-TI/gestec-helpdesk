@@ -40,7 +40,7 @@ export const ticketStatusLabels: Record<string, string> = {
   TRIAGE: "Triagem",
   IN_PROGRESS: "Em atendimento",
   WAITING_REQUESTER: "Aguardando solicitante",
-  WAITING_APPROVAL: "Aguardando avaliação",
+  WAITING_APPROVAL: "Aguardando aprovação",
   RESOLVED: "Resolvido",
   CLOSED: "Concluído",
   REOPENED_LOW_SCORE: "Reaberto por avaliação",
@@ -83,6 +83,10 @@ export function toDatetimeLocalValue(value: Date | string | null | undefined) {
 
 export const ticketHistoryLabels: Record<string, string> = {
   RECEIVED_FROM_ZEEV: "Recebido do Zeev",
+  INITIAL_CONTACT_RECORDED: "Contato inicial registrado",
+  ZEEV_STAGE_READY: "Etapa pronta no Zeev",
+  INTERNAL_APPROVAL_CONFIRMED: "Conclusão aprovada pela TI",
+  DEVIATION_REVIEWED: "Desvio revisado pela TI",
   WORK_STARTED: "Atendimento iniciado",
   WORK_STOPPED: "Atendimento pausado",
   RESOLVED_IN_HELP_DESK: "Finalizado no Help Desk",

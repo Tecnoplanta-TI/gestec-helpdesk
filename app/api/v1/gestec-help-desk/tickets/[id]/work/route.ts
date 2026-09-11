@@ -7,6 +7,7 @@ import { errorResponse, readJson } from "@/lib/http/api-error";
 const actionSchema = z.object({
   action: z.enum(["start", "stop"]),
   requestKey: z.string().trim().min(8).max(200),
+  contactMessage: z.string().trim().min(3).max(3_000).optional(),
 });
 
 export async function POST(
@@ -19,7 +20,12 @@ export async function POST(
     const input = actionSchema.parse(await readJson(request));
     const period =
       input.action === "start"
-        ? await startTicketWork(id, session.userId, input.requestKey)
+        ? await startTicketWork(
+            id,
+            session.userId,
+            input.requestKey,
+            input.contactMessage,
+          )
         : await stopTicketWork(id, session.userId, input.requestKey);
     return Response.json(period);
   } catch (error) {

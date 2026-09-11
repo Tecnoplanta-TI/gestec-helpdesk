@@ -58,6 +58,45 @@ export const zeevTicketSchema = z.object({
       applicationManagerCode: z.string().trim().optional(),
     })
     .optional(),
+  // Campos do formulário Zeev que precisam ser reapresentados quando uma
+  // atividade é concluída pela API. O Zeev revalida os obrigatórios em cada
+  // avanço do fluxo, mesmo quando eles foram preenchidos pelo solicitante.
+  formFields: z
+    .array(
+      z.object({
+        name: z.string().trim().min(1).max(200),
+        value: z
+          .union([
+            z.string().max(20_000),
+            z.number().finite(),
+            z.boolean(),
+            z.null(),
+          ])
+          .optional(),
+        row: z.number().int().positive().max(10_000).default(1),
+      }),
+    )
+    .max(300)
+    .optional(),
+});
+
+export const zeevStageReadySchema = z.object({
+  schemaVersion: z.literal("1.0"),
+  event: z.literal("ticket.stage_ready"),
+  idempotencyKey: z.string().trim().min(8).max(200),
+  source: z.object({
+    system: z.literal("zeev"),
+    processName: nonEmpty,
+    instanceId: z.coerce.string().trim().min(1).max(80),
+  }),
+  ticket: z.object({
+    externalReference: z.coerce.string().trim().min(1).max(500),
+  }),
+  stage: z.enum([
+    "INTERNAL_APPROVAL",
+    "REQUESTER_VALIDATION",
+    "DEVIATION_REVIEW",
+  ]),
 });
 
 export const ticketUpdateSchema = z
@@ -84,6 +123,28 @@ export const assignTicketSchema = z.object({
   assigneeId: uuid.nullable(),
   reason: z.string().trim().min(3).max(500),
   version: z.number().int().positive(),
+});
+
+export const approveTriageSchema = z.object({
+  assigneeId: uuid,
+  reason: z.string().trim().max(1000).optional(),
+  checklist: z.object({
+    classificationConfirmed: z.literal(true),
+    assignmentConfirmed: z.literal(true),
+  }),
+  version: z.number().int().positive(),
+  requestKey: z.string().trim().min(8).max(200),
+});
+
+export const approveConclusionSchema = z.object({
+  version: z.number().int().positive(),
+  requestKey: z.string().trim().min(8).max(200),
+});
+
+export const deviationReviewSchema = z.object({
+  action: z.enum(["REQUEST_REEVALUATION", "CLOSE_TICKET"]),
+  version: z.number().int().positive(),
+  requestKey: z.string().trim().min(8).max(200),
 });
 
 export const participantSchema = z.object({
@@ -134,6 +195,11 @@ export const serviceSchema = z.object({
 export const commentSchema = z.object({
   body: z.string().trim().min(1).max(10_000),
   internal: z.boolean().default(false),
+  requestKey: z.string().trim().min(8).max(200),
+});
+
+export const initialContactStartSchema = z.object({
+  message: z.string().trim().min(3).max(3_000),
   requestKey: z.string().trim().min(8).max(200),
 });
 

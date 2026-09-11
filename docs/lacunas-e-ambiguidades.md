@@ -2,65 +2,66 @@
 
 ## Criticidade alta
 
-| ID | Tema | Lacuna / conflito | Fontes | Decisão necessária |
-|----|------|-------------------|--------|--------------------|
-| GAP-001 | Design system | O `.pen` usa Luma + neutral + Geist e traço linear compatível; o código documentado indica new-york + Lucide | `padroes-ui.md`, preset `b2D0vQOME`, DEC-010 | DECIDED — implementar obrigatoriamente `b2D0vQOME` com `npx shadcn@latest init --preset b2D0vQOME --template next` no repositório executável |
-| GAP-003 | Repositório de implementação | Verificado em 2026-08-26: `C:\Users\julia.souza\Gestec` e caminhos Gestec equivalentes não estão acessíveis. Os repositórios locais `gestec-help-desk-old` e `Desktop\gestec-help-desk` são aplicativos standalone legados/Vite, não o Gestec documentado | DEC-001 e `referencia-gestec.md` | Disponibilizar ou confirmar o path do monorepo Gestec real antes da implementação; não implementar nos protótipos |
-| GAP-004 | Ciclo do ticket | Não existe matriz canônica de estados, mudanças, papéis e motivos | Specs 01.2–01.6 e 02.1 | Aprovar ciclo de vida e mudanças reversas |
-| GAP-005 | SLA | Prazos misturam horas e dias, sem calendário útil, feriados, pausa ou precedência | 01, 01.1 e legado | Definir política de primeira resposta e resolução |
-| GAP-006 | Segurança de integrações | Editor permite URL/token/body arbitrários | 04.1 | Definir criptografia, SSRF, allowlist, masking e auditoria |
-| GAP-007 | Permissões | `view/new/edit` não cobrem triagem, atribuição, integração, relatório e administração | DEC-004 e specs | Definir matriz sem conflitar com `Actions` existente |
+| ID      | Tema                         | Lacuna / conflito                                                                                                                                                                                                                                         | Fontes                                       | Decisão necessária                                                                                                                           |
+| ------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| GAP-001 | Design system                | O `.pen` usa Luma + neutral + Geist e traço linear compatível; o código documentado indica new-york + Lucide                                                                                                                                              | `padroes-ui.md`, preset `b2D0vQOME`, DEC-010 | DECIDED — implementar obrigatoriamente `b2D0vQOME` com `npx shadcn@latest init --preset b2D0vQOME --template next` no repositório executável |
+| GAP-003 | Repositório de implementação | Verificado em 2026-08-26: `C:\Users\julia.souza\Gestec` e caminhos Gestec equivalentes não estão acessíveis. Os repositórios locais `gestec-help-desk-old` e `Desktop\gestec-help-desk` são aplicativos standalone legados/Vite, não o Gestec documentado | DEC-001 e `referencia-gestec.md`             | Disponibilizar ou confirmar o path do monorepo Gestec real antes da implementação; não implementar nos protótipos                            |
+| GAP-004 | Ciclo do ticket              | Não existe matriz canônica de estados, mudanças, papéis e motivos                                                                                                                                                                                         | Specs 01.2–01.6 e 02.1                       | Aprovar ciclo de vida e mudanças reversas                                                                                                    |
+| GAP-005 | SLA                          | Prazos misturam horas e dias, sem calendário útil, feriados, pausa ou precedência                                                                                                                                                                         | 01, 01.1 e legado                            | Definir política de primeira resposta e resolução                                                                                            |
+| GAP-006 | Segurança de integrações     | Editor permite URL/token/body arbitrários                                                                                                                                                                                                                 | 04.1                                         | Definir criptografia, SSRF, allowlist, masking e auditoria                                                                                   |
+| GAP-007 | Permissões                   | `view/new/edit` não cobrem triagem, atribuição, integração, relatório e administração                                                                                                                                                                     | DEC-004 e specs                              | Definir matriz sem conflitar com `Actions` existente                                                                                         |
 
 ## Produto e operação
 
-| ID | Tema | Questão pendente | Classificação |
-|----|------|------------------|---------------|
-| GAP-008 | Timer | `DECIDED`: existe no máximo um timer ativo por usuário, inclusive em dispositivos concorrentes | CONFIRMED — Spec 15 / pedido de 2026-08-27 |
-| GAP-009 | Timer/SLA | Pausar timer pausa SLA? Aguardar solicitante pausa qual relógio? | TO_DEFINE |
-| GAP-010 | Kanban | Colunas por tipo ou status? Drag-and-drop é permitido? | TO_DEFINE |
-| GAP-011 | Ajuste solicitado | Quais campos o solicitante pode editar e quantas vezes pode reenviar? | TO_DEFINE |
-| GAP-012 | Recusa/cancelamento | Diferença semântica entre recusado, cancelado e tipo “cancelamento de solicitações” | TO_DEFINE |
-| GAP-013 | Aprovação | Avaliação pode ser pulada? Existe fechamento automático por timeout? | TO_DEFINE |
-| GAP-014 | Reabertura | Quem reabre, em qual prazo e com que impacto no SLA/faturamento? | TO_DEFINE |
-| GAP-015 | Participação | Definição de `onde participo`, `minha equipe` e observador | TO_DEFINE |
-| GAP-016 | Comentários | Comentário interno é recomendado, mas não aparece nas fontes atuais | PROPOSED |
-| GAP-017 | Anexos | Extensões, quantidade, retenção, antivírus e download autorizado | TO_DEFINE |
-| GAP-018 | Catálogos | `DECIDED`: centros de custo são cadastrados e administrados no Gestec; ownership dos demais catálogos ainda precisa ser definido | PARTIAL — Spec 07 / pedido de 2026-08-27 |
-| GAP-019 | Responsáveis | Limite, remoção e diferença entre principal, adicional e observador | TO_DEFINE |
-| GAP-020 | Cobrança | Totais de horas por centro de custo já são base de cobrança; permanecem indefinidos preço/hora, moeda, arredondamento, impostos e momento de congelamento | TO_DEFINE |
-| GAP-021 | Equipamentos | Integração patrimonial e efeito financeiro | TO_DEFINE |
-| GAP-022 | Notificações | Canais obrigatórios, preferências, nova tentativa segura, deduplicação e templates | TO_DEFINE |
-| GAP-023 | Integrações | Semântica da transformação e conjunto de gatilhos | TO_DEFINE |
-| GAP-024 | Busca/exportação | Campos pesquisáveis, limites e mascaramento de exportação; para apontamentos, o formato já está definido como Excel `.xlsx` pela Spec 15 | TO_DEFINE |
-| GAP-025 | Ações em massa | `DECIDED`: escopo mínimo inclui atribuição, prioridade e transição permitida, com pré-validação e sucesso parcial explícito conforme HD-US-0515; permanece `VALIDAR` apenas o limite quantitativo por lote | PARTIAL |
-| GAP-034 | Central de notificações | Estratégia de atualização (polling/push), retenção e eventos obrigatórios | TO_DEFINE |
-| GAP-035 | Monitor de SLA | Limiar de risco, reconhecimento e níveis de escalonamento manual | PROPOSED |
-| GAP-038 | Conhecimento | `DECIDED`: administração mínima de categorias e tags conforme HD-US-1205; permanecem `VALIDAR` audiências, revisão obrigatória, hierarquia taxonômica final, validade e métricas | PARTIAL |
-| GAP-040 | Relatórios agendados | Frequências, formatos, destinatários externos, retenção e acesso ao artefato | PROPOSED |
-| GAP-041 | Apontamentos | Prazo de edição, papéis revisores, fechamento e processo de correção após faturamento | TO_DEFINE |
-| GAP-043 | Central de relatórios | Catálogo inicial, fórmulas, limites, formatos, retenção e privacidade de amostras pequenas | TO_DEFINE |
-| GAP-044 | Ticket sem centro de custo | Qual papel pode corrigir o centro de custo ausente/inválido e liberar a classificação do apontamento? | VALIDAR |
-| GAP-045 | Catálogo em Meu Tempo | Consistência/latência aceitável para refletir criação, renomeação e inativação do centro de custo no seletor unificado | VALIDAR |
-| GAP-046 | Pausa/retomada | A Spec anterior menciona pausa, mas falta decidir disponibilidade, estados, auditoria e comportamento final sem confundir com SLA | VALIDAR |
-| GAP-047 | Autorização durante timer | Como finalizar com segurança se o usuário perder acesso ao projeto enquanto o timer estiver ativo? | VALIDAR |
-| GAP-048 | Geração por ticket | Qual transição dispara a consolidação: envio para aprovação, aprovação, resolução ou encerramento? | VALIDAR |
-| GAP-049 | Centro de custo inativo | Ticket pode concluir usando o centro histórico inativo ou deve exigir outro centro ativo? | VALIDAR |
-| GAP-050 | Correção automática | Quem pode corrigir apontamento gerado por ticket, em qual prazo e com qual aprovação? | VALIDAR |
-| GAP-051 | Centro de custo alterado | Alterar o centro após a geração reclassifica o apontamento anterior ou somente ciclos futuros? | VALIDAR |
-| GAP-052 | Disponibilidade de projeto | Quais papéis e escopos a opção “Disponível para todos” representa no RBAC final? | VALIDAR |
+| ID      | Tema                       | Questão pendente                                                                                                                                                                                                        | Classificação                              |
+| ------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| GAP-008 | Timer                      | `DECIDED`: existe no máximo um timer ativo por usuário, inclusive em dispositivos concorrentes                                                                                                                          | CONFIRMED — Spec 15 / pedido de 2026-08-27 |
+| GAP-009 | Timer/SLA                  | Pausar timer pausa SLA? Aguardar solicitante pausa qual relógio?                                                                                                                                                        | TO_DEFINE                                  |
+| GAP-010 | Kanban                     | Colunas por tipo ou status? Drag-and-drop é permitido?                                                                                                                                                                  | TO_DEFINE                                  |
+| GAP-011 | Ajuste solicitado          | Quais campos o solicitante pode editar e quantas vezes pode reenviar?                                                                                                                                                   | TO_DEFINE                                  |
+| GAP-012 | Recusa/cancelamento        | Diferença semântica entre recusado, cancelado e tipo “cancelamento de solicitações”                                                                                                                                     | TO_DEFINE                                  |
+| GAP-013 | Aprovação                  | Avaliação pode ser pulada? Existe fechamento automático por timeout?                                                                                                                                                    | TO_DEFINE                                  |
+| GAP-014 | Reabertura                 | Quem reabre, em qual prazo e com que impacto no SLA/faturamento?                                                                                                                                                        | TO_DEFINE                                  |
+| GAP-015 | Participação               | Definição de `onde participo`, `minha equipe` e observador                                                                                                                                                              | TO_DEFINE                                  |
+| GAP-016 | Comentários                | Comentário interno é recomendado, mas não aparece nas fontes atuais                                                                                                                                                     | PROPOSED                                   |
+| GAP-017 | Anexos                     | Extensões, quantidade, retenção, antivírus e download autorizado                                                                                                                                                        | TO_DEFINE                                  |
+| GAP-018 | Catálogos                  | `DECIDED`: centros de custo são cadastrados e administrados no Gestec; ownership dos demais catálogos ainda precisa ser definido                                                                                        | PARTIAL — Spec 07 / pedido de 2026-08-27   |
+| GAP-019 | Responsáveis               | Limite, remoção e diferença entre principal, adicional e observador                                                                                                                                                     | TO_DEFINE                                  |
+| GAP-020 | Cobrança                   | Totais de horas por centro de custo já são base de cobrança; permanecem indefinidos preço/hora, moeda, arredondamento, impostos e momento de congelamento                                                               | TO_DEFINE                                  |
+| GAP-021 | Equipamentos               | Integração patrimonial e efeito financeiro                                                                                                                                                                              | TO_DEFINE                                  |
+| GAP-022 | Notificações               | Canais obrigatórios, preferências, nova tentativa segura, deduplicação e templates                                                                                                                                      | TO_DEFINE                                  |
+| GAP-023 | Integrações                | Semântica da transformação e conjunto de gatilhos                                                                                                                                                                       | TO_DEFINE                                  |
+| GAP-024 | Busca/exportação           | Campos pesquisáveis, limites e mascaramento de exportação; para apontamentos, o formato já está definido como Excel `.xlsx` pela Spec 15                                                                                | TO_DEFINE                                  |
+| GAP-025 | Ações em massa             | `DECIDED`: escopo mínimo inclui atribuição, prioridade e transição permitida, com pré-validação e sucesso parcial explícito conforme HD-US-0515; permanece `VALIDAR` apenas o limite quantitativo por lote              | PARTIAL                                    |
+| GAP-034 | Central de notificações    | Estratégia de atualização (polling/push), retenção e eventos obrigatórios                                                                                                                                               | TO_DEFINE                                  |
+| GAP-035 | Monitor de SLA             | Limiar de risco, reconhecimento e níveis de escalonamento manual                                                                                                                                                        | PROPOSED                                   |
+| GAP-038 | Conhecimento               | `DECIDED`: administração mínima de categorias e tags conforme HD-US-1205; permanecem `VALIDAR` audiências, revisão obrigatória, hierarquia taxonômica final, validade e métricas                                        | PARTIAL                                    |
+| GAP-040 | Relatórios agendados       | Frequências, formatos, destinatários externos, retenção e acesso ao artefato                                                                                                                                            | PROPOSED                                   |
+| GAP-041 | Apontamentos               | Prazo de edição, papéis revisores, fechamento e processo de correção após faturamento                                                                                                                                   | TO_DEFINE                                  |
+| GAP-043 | Central de relatórios      | Catálogo inicial, fórmulas, limites, formatos, retenção e privacidade de amostras pequenas                                                                                                                              | TO_DEFINE                                  |
+| GAP-044 | Ticket sem centro de custo | Qual papel pode corrigir o centro de custo ausente/inválido e liberar a classificação do apontamento?                                                                                                                   | VALIDAR                                    |
+| GAP-045 | Catálogo em Meu Tempo      | Consistência/latência aceitável para refletir criação, renomeação e inativação do centro de custo no seletor unificado                                                                                                  | VALIDAR                                    |
+| GAP-046 | Pausa/retomada             | A Spec anterior menciona pausa, mas falta decidir disponibilidade, estados, auditoria e comportamento final sem confundir com SLA                                                                                       | VALIDAR                                    |
+| GAP-047 | Autorização durante timer  | Como finalizar com segurança se o usuário perder acesso ao projeto enquanto o timer estiver ativo?                                                                                                                      | VALIDAR                                    |
+| GAP-048 | Geração por ticket         | Qual transição dispara a consolidação: envio para aprovação, aprovação, resolução ou encerramento?                                                                                                                      | VALIDAR                                    |
+| GAP-049 | Centro de custo inativo    | Ticket pode concluir usando o centro histórico inativo ou deve exigir outro centro ativo?                                                                                                                               | VALIDAR                                    |
+| GAP-050 | Correção automática        | Quem pode corrigir apontamento gerado por ticket, em qual prazo e com qual aprovação?                                                                                                                                   | VALIDAR                                    |
+| GAP-051 | Centro de custo alterado   | Alterar o centro após a geração reclassifica o apontamento anterior ou somente ciclos futuros?                                                                                                                          | VALIDAR                                    |
+| GAP-052 | Disponibilidade de projeto | Quais papéis e escopos a opção “Disponível para todos” representa no RBAC final?                                                                                                                                        | VALIDAR                                    |
+| GAP-053 | Zeev — revisão de desvio   | Confirmar os textos/IDs exatos dos resultados da tarefa `Verificar desvio` e a macro que identifica de modo único cada execução da tarefa. São necessários para sincronizar nova avaliação e conclusão sem duplicidade. | VALIDAR                                    |
 
 ## Dados e arquitetura
 
-| ID | Tema | Questão pendente |
-|----|------|------------------|
-| GAP-026 | IDs | Formato público `TK-000123` versus UUID interno |
-| GAP-027 | Soft delete | Entidades que podem ser excluídas versus apenas desativadas |
-| GAP-028 | Concorrência | Estratégia de optimistic locking para ticket e integração |
-| GAP-029 | Auditoria | Retenção, imutabilidade e acesso aos eventos |
-| GAP-030 | Storage | Provider, URLs assinadas, quarentena e lifecycle de anexos |
-| GAP-031 | E-mail | Provider, domínio remetente e templates |
-| GAP-032 | Observabilidade | Ferramentas atuais do Gestec não verificadas |
-| GAP-033 | Migração | Não existe schema Prisma nem plano de migration neste repositório |
+| ID      | Tema            | Questão pendente                                                  |
+| ------- | --------------- | ----------------------------------------------------------------- |
+| GAP-026 | IDs             | Formato público `TK-000123` versus UUID interno                   |
+| GAP-027 | Soft delete     | Entidades que podem ser excluídas versus apenas desativadas       |
+| GAP-028 | Concorrência    | Estratégia de optimistic locking para ticket e integração         |
+| GAP-029 | Auditoria       | Retenção, imutabilidade e acesso aos eventos                      |
+| GAP-030 | Storage         | Provider, URLs assinadas, quarentena e lifecycle de anexos        |
+| GAP-031 | E-mail          | Provider, domínio remetente e templates                           |
+| GAP-032 | Observabilidade | Ferramentas atuais do Gestec não verificadas                      |
+| GAP-033 | Migração        | Não existe schema Prisma nem plano de migration neste repositório |
 
 ## Restrições confirmadas
 

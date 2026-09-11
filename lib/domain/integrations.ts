@@ -11,6 +11,7 @@ import { prisma } from "@/lib/prisma";
 import {
   normalizePriority,
   type evaluationSchema,
+  type zeevStageReadySchema,
   type zeevTicketSchema,
 } from "@/lib/domain/schemas";
 import {
@@ -21,6 +22,7 @@ import type { z } from "zod";
 
 type ZeevTicketInput = z.infer<typeof zeevTicketSchema>;
 type EvaluationInput = z.infer<typeof evaluationSchema>;
+type ZeevStageReadyInput = z.infer<typeof zeevStageReadySchema>;
 
 export function assertBearerToken(
   request: Request,
@@ -106,6 +108,7 @@ export async function receiveZeevTicket(input: ZeevTicketInput) {
           input.assignment?.initialContactDeadline,
         ),
         serviceDeadline: parseOptionalDate(input.assignment?.serviceDeadline),
+        status: TicketStatus.TRIAGE,
       },
       update: {
         externalInstanceId: String(input.source.instanceId),
@@ -279,5 +282,80 @@ export async function receiveZeevEvaluation(input: EvaluationInput) {
       routedToAssigneeId: lowScore ? ticket.assigneeId : null,
       replay: false,
     };
+  });
+}
+
+export async function receiveZeevStageReady(input: ZeevStageReadyInput) {
+  return prisma.$transaction(async (tx) => {
+    const previousExecution = await tx.syncExecution.findUnique({
+      where: { idempotencyKey: input.idempotencyKey },
+    });
+    if (previousExecution?.ticketId) {
+      const ticket = await tx.ticket.findUnique({
+        where: { id: previousExecution.ticketId },
+      });
+      if (!ticket) {
+        throw new ApiError(
+          409,
+          "INCONSISTENT_REPLAY",
+          "Evento de etapa repetido sem ticket correspondente.",
+        );
+      }
+      if (ticket.externalReference !== input.ticket.externalReference) {
+        throw new ApiError(
+          409,
+          "IDEMPOTENCY_KEY_REUSED",
+          "A chave de idempotência já foi usada por outro ticket.",
+        );
+      }
+      return { ticket, replay: true };
+    }
+
+    const ticket = await tx.ticket.findUnique({
+      where: { externalReference: input.ticket.externalReference },
+    });
+    if (!ticket) {
+      throw new ApiError(
+        404,
+        "TICKET_NOT_FOUND",
+        "Ticket correspondente não encontrado.",
+      );
+    }
+    if (
+      ticket.externalInstanceId &&
+      ticket.externalInstanceId !== String(input.source.instanceId)
+    ) {
+      throw new ApiError(
+        409,
+        "INSTANCE_MISMATCH",
+        "A instância Zeev informada não corresponde ao ticket.",
+      );
+    }
+
+    await tx.syncExecution.create({
+      data: {
+        ticketId: ticket.id,
+        idempotencyKey: input.idempotencyKey,
+        event: input.event,
+        direction: SyncDirection.INBOUND,
+        status: SyncStatus.SUCCEEDED,
+        payload: {
+          ...input,
+          resolutionCycle: ticket.resolutionCycle,
+        } as unknown as Prisma.InputJsonValue,
+        response: { stage: input.stage },
+        attempts: 1,
+      },
+    });
+    await tx.ticketHistory.create({
+      data: {
+        ticketId: ticket.id,
+        action: "ZEEV_STAGE_READY",
+        fromStatus: ticket.status,
+        toStatus: ticket.status,
+        details: { stage: input.stage, instanceId: input.source.instanceId },
+      },
+    });
+    return { ticket, replay: false };
   });
 }

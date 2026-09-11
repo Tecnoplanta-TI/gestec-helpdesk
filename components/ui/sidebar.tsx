@@ -514,6 +514,17 @@ function SidebarMenuButton({
     tooltip?: string | React.ComponentProps<typeof TooltipContent>;
   } & VariantProps<typeof sidebarMenuButtonVariants>) {
   const { isMobile, state } = useSidebar();
+  const [hydrated, setHydrated] = React.useState(false);
+
+  // Base UI generates accessibility IDs for TooltipTrigger. Deferring this
+  // optional enhancement until after hydration keeps the server anchor and its
+  // first client render identical, while retaining the tooltip for collapsed
+  // desktop navigation.
+  React.useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  const shouldRenderTooltip = hydrated && Boolean(tooltip);
   const comp = useRender({
     defaultTagName: "button",
     props: mergeProps<"button">(
@@ -522,7 +533,7 @@ function SidebarMenuButton({
       },
       props,
     ),
-    render: !tooltip ? render : <TooltipTrigger render={render} />,
+    render: !shouldRenderTooltip ? render : <TooltipTrigger render={render} />,
     state: {
       slot: "sidebar-menu-button",
       sidebar: "menu-button",
@@ -531,7 +542,7 @@ function SidebarMenuButton({
     },
   });
 
-  if (!tooltip) {
+  if (!shouldRenderTooltip) {
     return comp;
   }
 

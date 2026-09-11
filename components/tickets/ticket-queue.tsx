@@ -253,19 +253,19 @@ export function TicketQueue({
       )}
 
       <div className="overflow-hidden rounded-lg border">
-        <Table>
+        <Table className="min-w-[72rem] table-fixed">
           <TableHeader>
             <TableRow>
               {canManage && <TableHead className="w-10" />}
-              <TableHead>Ticket</TableHead>
-              <TableHead>Solicitante</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Projeto</TableHead>
-              <TableHead>Prioridade</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>SLA</TableHead>
-              <TableHead>Responsável</TableHead>
-              <TableHead className="text-right">Aberto em</TableHead>
+              <TableHead className="w-[24rem]">Ticket</TableHead>
+              <TableHead className="w-40">Solicitante</TableHead>
+              <TableHead className="w-28">Tipo</TableHead>
+              <TableHead className="w-48">Projeto</TableHead>
+              <TableHead className="w-28">Prioridade</TableHead>
+              <TableHead className="w-36">Status</TableHead>
+              <TableHead className="w-40">SLA</TableHead>
+              <TableHead className="w-40">Responsável</TableHead>
+              <TableHead className="w-40 text-right">Aberto em</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -295,11 +295,12 @@ export function TicketQueue({
                         />
                       </TableCell>
                     )}
-                    <TableCell className="max-w-md">
+                    <TableCell>
                       <Link
                         href={`/gestec_help_desk/tickets/${ticket.id}`}
                         prefetch={false}
-                        className="font-medium hover:underline"
+                        className="block truncate font-medium hover:underline"
+                        title={`#${ticket.number} — ${ticket.title}`}
                       >
                         #{ticket.number} — {ticket.title}
                       </Link>
@@ -307,15 +308,20 @@ export function TicketQueue({
                         {ticket.externalReference}
                       </p>
                     </TableCell>
-                    <TableCell>{ticket.requesterName}</TableCell>
-                    <TableCell>
+                    <TableCell
+                      className="truncate"
+                      title={ticket.requesterName}
+                    >
+                      {ticket.requesterName}
+                    </TableCell>
+                    <TableCell className="truncate">
                       {
                         requestTypeLabels[
                           normalizeRequestType(ticket.requestType)
                         ]
                       }
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="truncate">
                       {ticket.costCenter?.name ?? (
                         <span className="text-destructive">Pendente</span>
                       )}
@@ -345,7 +351,10 @@ export function TicketQueue({
                         {sla.label}
                       </Badge>
                     </TableCell>
-                    <TableCell>
+                    <TableCell
+                      className="truncate"
+                      title={ticket.assignee?.name ?? "Não atribuído"}
+                    >
                       {ticket.assignee?.name ?? "Não atribuído"}
                     </TableCell>
                     <TableCell className="text-right tabular-nums">

@@ -55,11 +55,19 @@ describe("contratos do domínio", () => {
       },
       requester: { openedAt: "2026-09-02T16:00:00-03:00", name: "Ana" },
       ticket: { externalReference: 4321, summary: "Sem acesso ao e-mail" },
+      formFields: [
+        { name: "servico", value: "Acesso", row: 1 },
+        { name: "sistemaIndisponivel", value: false, row: 1 },
+      ],
     });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.source.instanceId).toBe("4321");
       expect(result.data.ticket.externalReference).toBe("4321");
+      expect(result.data.formFields).toEqual([
+        { name: "servico", value: "Acesso", row: 1 },
+        { name: "sistemaIndisponivel", value: false, row: 1 },
+      ]);
     }
   });
 
