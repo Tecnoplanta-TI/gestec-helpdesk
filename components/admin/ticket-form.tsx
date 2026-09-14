@@ -32,6 +32,7 @@ import {
   kanbanColumns,
   normalizeRequestType,
 } from "@/lib/domain/request-types";
+import { ticketClassificationFields } from "@/lib/domain/ticket-classification";
 import {
   formatDateTime,
   ticketHistoryLabels,
@@ -110,11 +111,13 @@ export function AdminTicketForm({
   users,
   costCenters,
   services,
+  serviceGroups,
 }: {
   ticket: AdminTicketFormTicket;
   users: Lookup[];
   costCenters: Array<Lookup & { code: string }>;
   services: Array<Lookup & { groupName: string }>;
+  serviceGroups: string[];
 }) {
   const router = useRouter();
   const evaluation = ticket.evaluations[0] ?? null;
@@ -160,6 +163,10 @@ export function AdminTicketForm({
           : "no",
     evaluationComments: evaluation?.comments ?? "",
   });
+  const classification = ticketClassificationFields({
+    requestType: form.requestType,
+    serviceGroup: form.serviceGroup,
+  });
   const [workPeriods, setWorkPeriods] = useState(
     ticket.workPeriods.map((period) => ({
       id: period.id,
@@ -177,6 +184,33 @@ export function AdminTicketForm({
     value: (typeof form)[K],
   ) {
     setForm((current) => ({ ...current, [key]: value }));
+  }
+
+  function selectCatalogService(value: string | null) {
+    const catalogServiceId = value ?? "none";
+    const service = services.find((item) => item.id === catalogServiceId);
+    setForm((current) => ({
+      ...current,
+      catalogServiceId,
+      serviceGroup: service?.groupName ?? current.serviceGroup,
+    }));
+  }
+
+  function selectServiceGroup(value: string | null) {
+    const serviceGroup = value ?? "";
+    setForm((current) => {
+      const selectedService = services.find(
+        (item) => item.id === current.catalogServiceId,
+      );
+      return {
+        ...current,
+        serviceGroup,
+        catalogServiceId:
+          selectedService?.groupName === serviceGroup
+            ? current.catalogServiceId
+            : "none",
+      };
+    });
   }
 
   function toIsoOrNull(value: string) {
@@ -486,9 +520,7 @@ export function AdminTicketForm({
               <FieldLabel>Serviço do catálogo</FieldLabel>
               <Select
                 value={form.catalogServiceId}
-                onValueChange={(value) =>
-                  update("catalogServiceId", value ?? "none")
-                }
+                onValueChange={selectCatalogService}
               >
                 <SelectTrigger>
                   <SelectValue>
@@ -559,31 +591,53 @@ export function AdminTicketForm({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="admin-ticket-group">Grupo</FieldLabel>
-              <Input
-                id="admin-ticket-group"
-                value={form.serviceGroup}
-                onChange={(event) => update("serviceGroup", event.target.value)}
-              />
+              <FieldLabel>Grupo de serviços</FieldLabel>
+              <Select
+                value={form.serviceGroup || "none"}
+                onValueChange={selectServiceGroup}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Sem grupo</SelectItem>
+                  {serviceGroups.map((group) => (
+                    <SelectItem key={group} value={group}>
+                      {group}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </Field>
-            <Field>
-              <FieldLabel htmlFor="admin-ticket-app">Aplicação</FieldLabel>
-              <Input
-                id="admin-ticket-app"
-                value={form.applicationOrProcess}
-                onChange={(event) =>
-                  update("applicationOrProcess", event.target.value)
-                }
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="admin-ticket-asset">Ativo</FieldLabel>
-              <Input
-                id="admin-ticket-asset"
-                value={form.assetCode}
-                onChange={(event) => update("assetCode", event.target.value)}
-              />
-            </Field>
+            {classification.showApplicationOrProcess && (
+              <Field>
+                <FieldLabel htmlFor="admin-ticket-app">
+                  Aplicativo ou processo
+                </FieldLabel>
+                <Input
+                  id="admin-ticket-app"
+                  value={form.applicationOrProcess}
+                  onChange={(event) =>
+                    update("applicationOrProcess", event.target.value)
+                  }
+                />
+              </Field>
+            )}
+            {classification.showAssetCode && (
+              <Field>
+                <FieldLabel htmlFor="admin-ticket-asset">
+                  {normalizeRequestType(form.requestType) ===
+                  "interrupcao_servico"
+                    ? "Código do equipamento ou infraestrutura"
+                    : "Código do bem ou equipamento"}
+                </FieldLabel>
+                <Input
+                  id="admin-ticket-asset"
+                  value={form.assetCode}
+                  onChange={(event) => update("assetCode", event.target.value)}
+                />
+              </Field>
+            )}
             <Field>
               <FieldLabel htmlFor="admin-ticket-external">
                 Referência externa

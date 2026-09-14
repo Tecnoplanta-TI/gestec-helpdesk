@@ -132,15 +132,15 @@ export function AdminTicketTable({
       </form>
 
       <div className="overflow-x-auto rounded-lg border">
-        <Table>
+        <Table className="table-fixed">
           <TableHeader>
             <TableRow>
-              <TableHead>Ticket</TableHead>
-              <TableHead>Solicitante</TableHead>
-              <TableHead>Centro de custo</TableHead>
+              <TableHead className="w-[28%]">Ticket</TableHead>
+              <TableHead className="w-[16%]">Solicitante</TableHead>
+              <TableHead className="w-[16%]">Centro de custo</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Prioridade</TableHead>
-              <TableHead>Responsável</TableHead>
+              <TableHead className="w-[16%]">Responsável</TableHead>
               <TableHead className="text-right">Aberto em</TableHead>
             </TableRow>
           </TableHeader>
@@ -170,8 +170,13 @@ export function AdminTicketTable({
                       {ticket.externalReference}
                     </p>
                   </TableCell>
-                  <TableCell className="truncate" title={ticket.requesterName}>{ticket.requesterName}</TableCell>
-                  <TableCell>
+                  <TableCell className="truncate" title={ticket.requesterName}>
+                    {ticket.requesterName}
+                  </TableCell>
+                  <TableCell
+                    className="truncate"
+                    title={ticket.costCenter?.name ?? "Sem centro de custo"}
+                  >
                     {ticket.costCenter?.name ?? "Sem centro de custo"}
                   </TableCell>
                   <TableCell>
@@ -184,7 +189,10 @@ export function AdminTicketTable({
                       {ticketPriorityLabels[ticket.priority]}
                     </Badge>
                   </TableCell>
-                  <TableCell>
+                  <TableCell
+                    className="truncate"
+                    title={ticket.assignee?.name ?? "Não atribuído"}
+                  >
                     {ticket.assignee?.name ?? "Não atribuído"}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">

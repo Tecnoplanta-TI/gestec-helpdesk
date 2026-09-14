@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { hasPermission } from "@/lib/auth/permissions";
+import { ticketClassificationFields } from "@/lib/domain/ticket-classification";
 import {
   commentSchema,
   costCenterUpdateSchema,
@@ -187,5 +188,26 @@ describe("contratos do domínio", () => {
         endsOn: "2026-09-30",
       }).success,
     ).toBe(false);
+  });
+
+  it("expõe somente os campos adicionais previstos para a classificação", () => {
+    expect(
+      ticketClassificationFields({
+        requestType: "Solicitação",
+        serviceGroup: "Zeev",
+      }),
+    ).toEqual({ showApplicationOrProcess: true, showAssetCode: false });
+    expect(
+      ticketClassificationFields({
+        requestType: "Interrupção de serviços",
+        serviceGroup: "Rede / Internet",
+      }),
+    ).toEqual({ showApplicationOrProcess: false, showAssetCode: true });
+    expect(
+      ticketClassificationFields({
+        requestType: "Solicitação",
+        serviceGroup: "Aquisição / Alocação",
+      }),
+    ).toEqual({ showApplicationOrProcess: false, showAssetCode: true });
   });
 });

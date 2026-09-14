@@ -111,9 +111,9 @@ export function toDatetimeLocalValue(value: Date | string | null | undefined) {
 }
 
 export const ticketHistoryLabels: Record<string, string> = {
-  RECEIVED_FROM_ZEEV: "Recebido do Zeev",
+  RECEIVED_FROM_ZEEV: "Ticket recebido pela integração",
   INITIAL_CONTACT_RECORDED: "Contato inicial registrado",
-  ZEEV_STAGE_READY: "Etapa pronta no Zeev",
+  ZEEV_STAGE_READY: "Etapa liberada para atendimento",
   INTERNAL_APPROVAL_CONFIRMED: "Conclusão aprovada pela TI",
   DEVIATION_REVIEWED: "Desvio revisado pela TI",
   WORK_STARTED: "Atendimento iniciado",
@@ -131,7 +131,7 @@ export const ticketHistoryLabels: Record<string, string> = {
   ASSET_UNLINKED: "Ativo desvinculado",
   PRIORITY_CHANGED: "Prioridade alterada",
   STATUS_CHANGED: "Status alterado",
-  COMMENT_ADDED: "Comentário enviado ao Zeev",
+  COMMENT_ADDED: "Comentário adicionado",
   INTERNAL_COMMENT_ADDED: "Nota interna registrada",
   ADMIN_TICKET_UPDATED: "Ajuste administrativo",
   ADMIN_TICKET_CREATED: "Ticket criado no admin",

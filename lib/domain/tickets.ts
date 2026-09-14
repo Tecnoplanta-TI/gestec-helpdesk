@@ -175,24 +175,13 @@ export async function startTicketWork(
         return { period: replay, queuedContactKey: contactKey };
       }
       if (
-        ticket.status === TicketStatus.RESOLVED ||
-        ticket.status === TicketStatus.CLOSED ||
-        ticket.status === TicketStatus.CANCELLED
+        ticket.status !== TicketStatus.IN_PROGRESS &&
+        ticket.status !== TicketStatus.REOPENED_LOW_SCORE
       ) {
         throw new ApiError(
           409,
           "TICKET_NOT_WORKABLE",
-          "Este ticket não aceita novos períodos de trabalho.",
-        );
-      }
-      if (
-        ticket.status === TicketStatus.NEW ||
-        ticket.status === TicketStatus.TRIAGE
-      ) {
-        throw new ApiError(
-          409,
-          "TRIAGE_REQUIRED",
-          "Aprove a triagem antes de iniciar o atendimento.",
+          "O atendimento só pode ser iniciado ou retomado durante a etapa de atendimento.",
         );
       }
       const mustSyncInitialContact = Boolean(

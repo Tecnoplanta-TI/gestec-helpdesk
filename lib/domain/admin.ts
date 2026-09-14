@@ -10,6 +10,7 @@ import {
 import { auditSnapshot } from "@/lib/domain/audit";
 import { getProjectAny } from "@/lib/domain/projects";
 import { normalizeRequestType } from "@/lib/domain/request-types";
+import { ticketClassificationFields } from "@/lib/domain/ticket-classification";
 import { ticketInclude } from "@/lib/domain/tickets";
 import type {
   adminTicketCreateSchema,
@@ -123,12 +124,13 @@ export async function createAdminTicket(input: {
         );
       }
     }
+    let selectedService: { id: string; group: { name: string } } | null = null;
     if (input.data.catalogServiceId) {
-      const service = await tx.service.findUnique({
+      selectedService = await tx.service.findUnique({
         where: { id: input.data.catalogServiceId },
-        select: { id: true },
+        select: { id: true, group: { select: { name: true } } },
       });
-      if (!service) {
+      if (!selectedService) {
         throw new ApiError(422, "SERVICE_UNAVAILABLE", "O serviço não existe.");
       }
     }
@@ -151,6 +153,7 @@ export async function createAdminTicket(input: {
         assigneeId: input.data.assigneeId ?? null,
         costCenterId: input.data.costCenterId ?? null,
         catalogServiceId: input.data.catalogServiceId ?? null,
+        serviceGroup: selectedService?.group.name ?? null,
       },
       include: ticketInclude,
     });
@@ -209,12 +212,13 @@ export async function updateAdminTicket(input: {
         );
       }
     }
+    let selectedService: { id: string; group: { name: string } } | null = null;
     if (input.data.catalogServiceId) {
-      const service = await tx.service.findUnique({
+      selectedService = await tx.service.findUnique({
         where: { id: input.data.catalogServiceId },
-        select: { id: true },
+        select: { id: true, group: { select: { name: true } } },
       });
-      if (!service) {
+      if (!selectedService) {
         throw new ApiError(422, "SERVICE_UNAVAILABLE", "O serviço não existe.");
       }
     }
@@ -233,17 +237,63 @@ export async function updateAdminTicket(input: {
       data.requesterName = input.data.requesterName;
     if (input.data.requesterExternalId !== undefined)
       data.requesterExternalId = input.data.requesterExternalId;
-    if (input.data.requestType !== undefined) {
-      data.requestType = input.data.requestType
-        ? normalizeRequestType(input.data.requestType)
-        : null;
+    const nextRequestType =
+      input.data.requestType !== undefined
+        ? input.data.requestType
+          ? normalizeRequestType(input.data.requestType)
+          : null
+        : current.requestType;
+    let requestedGroup =
+      input.data.serviceGroup !== undefined
+        ? input.data.serviceGroup
+        : current.serviceGroup;
+    if (requestedGroup) {
+      const serviceGroup = await tx.serviceGroup.findFirst({
+        where: {
+          name: { equals: requestedGroup, mode: "insensitive" },
+          active: true,
+        },
+        select: { name: true },
+      });
+      if (!serviceGroup) {
+        throw new ApiError(
+          422,
+          "SERVICE_GROUP_UNAVAILABLE",
+          "O grupo de serviços não está disponível.",
+        );
+      }
+      requestedGroup = serviceGroup.name;
     }
+    const keepsSelectedService = Boolean(
+      selectedService &&
+      (!requestedGroup ||
+        selectedService.group.name.localeCompare(requestedGroup, "pt-BR", {
+          sensitivity: "accent",
+        }) === 0),
+    );
+    const nextServiceGroup =
+      keepsSelectedService && selectedService
+        ? selectedService.group.name
+        : requestedGroup;
+    const classification = ticketClassificationFields({
+      requestType: nextRequestType,
+      serviceGroup: nextServiceGroup,
+    });
+    if (input.data.requestType !== undefined)
+      data.requestType = nextRequestType;
     if (input.data.service !== undefined) data.service = input.data.service;
-    if (input.data.serviceGroup !== undefined)
-      data.serviceGroup = input.data.serviceGroup;
-    if (input.data.applicationOrProcess !== undefined)
+    if (
+      input.data.serviceGroup !== undefined ||
+      input.data.catalogServiceId !== undefined
+    )
+      data.serviceGroup = nextServiceGroup;
+    if (!classification.showApplicationOrProcess) {
+      data.applicationOrProcess = null;
+    } else if (input.data.applicationOrProcess !== undefined)
       data.applicationOrProcess = input.data.applicationOrProcess;
-    if (input.data.assetCode !== undefined)
+    if (!classification.showAssetCode) {
+      data.assetCode = null;
+    } else if (input.data.assetCode !== undefined)
       data.assetCode = input.data.assetCode;
     if (input.data.resolutionSummary !== undefined)
       data.resolutionSummary = input.data.resolutionSummary;
@@ -288,9 +338,10 @@ export async function updateAdminTicket(input: {
         : { disconnect: true };
     }
     if (input.data.catalogServiceId !== undefined) {
-      data.catalogService = input.data.catalogServiceId
-        ? { connect: { id: input.data.catalogServiceId } }
-        : { disconnect: true };
+      data.catalogService =
+        keepsSelectedService && selectedService
+          ? { connect: { id: selectedService.id } }
+          : { disconnect: true };
     }
     if (input.data.requesterId !== undefined) {
       if (input.data.requesterId)

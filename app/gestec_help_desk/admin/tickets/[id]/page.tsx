@@ -14,28 +14,34 @@ export default async function AdminTicketPage({
 }) {
   await requirePagePermission("admin:manage");
   const { id } = await params;
-  const [ticket, users, costCenters, services] = await Promise.all([
-    prisma.ticket.findUnique({
-      where: { id },
-      include: ticketInclude,
-    }),
-    prisma.userRef.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true },
-    }),
-    prisma.costCenter.findMany({
-      orderBy: { name: "asc" },
-      select: { id: true, name: true, code: true },
-    }),
-    prisma.service.findMany({
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        group: { select: { name: true } },
-      },
-    }),
-  ]);
+  const [ticket, users, costCenters, services, serviceGroups] =
+    await Promise.all([
+      prisma.ticket.findUnique({
+        where: { id },
+        include: ticketInclude,
+      }),
+      prisma.userRef.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true },
+      }),
+      prisma.costCenter.findMany({
+        orderBy: { name: "asc" },
+        select: { id: true, name: true, code: true },
+      }),
+      prisma.service.findMany({
+        orderBy: { name: "asc" },
+        select: {
+          id: true,
+          name: true,
+          group: { select: { name: true } },
+        },
+      }),
+      prisma.serviceGroup.findMany({
+        where: { active: true },
+        orderBy: { name: "asc" },
+        select: { name: true },
+      }),
+    ]);
   if (!ticket) notFound();
 
   return (
@@ -48,6 +54,7 @@ export default async function AdminTicketPage({
         name: service.name,
         groupName: service.group.name,
       }))}
+      serviceGroups={serviceGroups.map((group) => group.name)}
     />
   );
 }

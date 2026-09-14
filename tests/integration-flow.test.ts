@@ -236,6 +236,11 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
       expect(replay.id).toBe(first.id);
       expect(entries).toHaveLength(1);
       expect(entries[0].durationSeconds).toBe(60);
+      await expect(
+        startTicketWork(ticketId, userId, `work-blocked:${runId}`),
+      ).rejects.toThrow(
+        "só pode ser iniciado ou retomado durante a etapa de atendimento",
+      );
 
       const stageDeliveries = await Promise.all([
         receiveZeevStageReady({

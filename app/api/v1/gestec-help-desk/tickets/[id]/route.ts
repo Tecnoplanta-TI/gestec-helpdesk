@@ -3,6 +3,7 @@ import { Prisma, TicketStatus } from "@prisma/client";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
 import { normalizeRequestType } from "@/lib/domain/request-types";
+import { ticketClassificationFields } from "@/lib/domain/ticket-classification";
 import { canTransition } from "@/lib/domain/operations";
 import { ticketInclude } from "@/lib/domain/tickets";
 import { ticketUpdateSchema } from "@/lib/domain/schemas";
@@ -118,22 +119,73 @@ export async function PATCH(
             "O centro de custo não está disponível.",
           );
       }
+      let selectedService: { id: string; group: { name: string } } | null =
+        null;
       if (input.catalogServiceId) {
-        const service = await tx.service.findFirst({
+        selectedService = await tx.service.findFirst({
           where: {
             id: input.catalogServiceId,
             active: true,
             group: { active: true },
           },
-          select: { id: true },
+          select: { id: true, group: { select: { name: true } } },
         });
-        if (!service)
+        if (!selectedService)
           throw new ApiError(
             422,
             "SERVICE_UNAVAILABLE",
             "O serviço não está disponível.",
           );
       }
+      let selectedGroupName: string | null | undefined;
+      if (input.serviceGroup !== undefined) {
+        if (input.serviceGroup === null) {
+          selectedGroupName = null;
+        } else {
+          const group = await tx.serviceGroup.findFirst({
+            where: {
+              name: { equals: input.serviceGroup, mode: "insensitive" },
+              active: true,
+            },
+            select: { name: true },
+          });
+          if (!group)
+            throw new ApiError(
+              422,
+              "SERVICE_GROUP_UNAVAILABLE",
+              "O grupo de serviços não está disponível.",
+            );
+          selectedGroupName = group.name;
+        }
+      }
+      if (
+        (input.catalogServiceId !== undefined ||
+          input.serviceGroup !== undefined ||
+          input.requestType !== undefined ||
+          input.service !== undefined ||
+          input.applicationOrProcess !== undefined ||
+          input.assetCode !== undefined) &&
+        current.status !== TicketStatus.NEW &&
+        current.status !== TicketStatus.TRIAGE
+      ) {
+        throw new ApiError(
+          409,
+          "CLASSIFICATION_LOCKED",
+          "A classificação do ticket só pode ser alterada durante a triagem.",
+        );
+      }
+      const nextRequestType = input.requestType
+        ? normalizeRequestType(input.requestType)
+        : current.requestType;
+      const nextServiceGroup = selectedService
+        ? selectedService.group.name
+        : input.serviceGroup !== undefined
+          ? (selectedGroupName ?? null)
+          : current.serviceGroup;
+      const classification = ticketClassificationFields({
+        requestType: nextRequestType,
+        serviceGroup: nextServiceGroup,
+      });
       const data: Prisma.TicketUpdateInput = {
         ...(input.status ? { status: input.status } : {}),
         ...(input.priority ? { priority: input.priority } : {}),
@@ -151,17 +203,22 @@ export async function PATCH(
                 : { disconnect: true },
             }
           : {}),
-        ...(input.requestType
-          ? { requestType: normalizeRequestType(input.requestType) }
-          : {}),
-        ...(input.serviceGroup !== undefined
-          ? { serviceGroup: input.serviceGroup }
+        ...(input.requestType ? { requestType: nextRequestType } : {}),
+        ...(input.catalogServiceId !== undefined ||
+        input.serviceGroup !== undefined
+          ? { serviceGroup: nextServiceGroup }
           : {}),
         ...(input.service !== undefined ? { service: input.service } : {}),
-        ...(input.applicationOrProcess !== undefined
-          ? { applicationOrProcess: input.applicationOrProcess }
-          : {}),
-        ...(input.assetCode !== undefined ? { assetCode: input.assetCode } : {}),
+        ...(!classification.showApplicationOrProcess
+          ? { applicationOrProcess: null }
+          : input.applicationOrProcess !== undefined
+            ? { applicationOrProcess: input.applicationOrProcess }
+            : {}),
+        ...(!classification.showAssetCode
+          ? { assetCode: null }
+          : input.assetCode !== undefined
+            ? { assetCode: input.assetCode }
+            : {}),
         version: { increment: 1 },
       };
       const ticket = await tx.ticket.update({

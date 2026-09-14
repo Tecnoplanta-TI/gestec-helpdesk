@@ -58,7 +58,7 @@ export default async function TicketsPage({
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Tickets</h1>
         <p className="text-sm text-muted-foreground">
-          Fila operacional dos atendimentos recebidos do Zeev.
+          Fila operacional dos atendimentos recebidos pela TI.
         </p>
       </div>
       <Card>

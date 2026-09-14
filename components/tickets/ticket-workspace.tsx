@@ -54,6 +54,7 @@ import {
   requestTypeLabels,
   slaState,
 } from "@/lib/domain/request-types";
+import { ticketClassificationFields } from "@/lib/domain/ticket-classification";
 import {
   formatDateTime,
   formatDuration,
@@ -217,11 +218,8 @@ export function TicketWorkspace({
   const initialContactRecorded = ticket.workPeriods.some(
     (period) => period.cycle === ticket.resolutionCycle,
   );
-  const triageSyncBlocked = ticket.syncExecutions.some(
-    (item) =>
-      item.event === "ticket.triage_approved" &&
-      item.direction === "OUTBOUND" &&
-      item.status !== "SUCCEEDED",
+  const canWorkTicket = ["IN_PROGRESS", "REOPENED_LOW_SCORE"].includes(
+    ticket.status,
   );
   const internalApprovalReady = ticket.syncExecutions.some(
     (item) =>
@@ -247,9 +245,10 @@ export function TicketWorkspace({
       !ticket.participants.some((item) => item.user.id === user.id),
   );
   const isTriageStage = ["NEW", "TRIAGE"].includes(ticket.status);
-  const isInterruption =
-    normalizeRequestType(ticket.requestType) === "interrupcao_servico";
-  const isZeevServiceGroup = ticket.serviceGroup?.trim().toLowerCase() === "zeev";
+  const classification = ticketClassificationFields({
+    requestType: ticket.requestType,
+    serviceGroup: ticket.serviceGroup,
+  });
 
   useEffect(() => {
     const failed = ticket.syncExecutions.filter(
@@ -268,10 +267,14 @@ export function TicketWorkspace({
         router.refresh();
       } catch (error) {
         const message =
-          error instanceof Error ? error.message : "Não foi possível concluir a ação.";
+          error instanceof Error
+            ? error.message
+            : "Não foi possível concluir a ação.";
         if (/zeev|sincroniza/i.test(message)) {
           console.info("[Zeev] Falha de sincronização do ticket", error);
-          toast.error("Não foi possível concluir a etapa agora. Tente novamente.");
+          toast.error(
+            "Não foi possível concluir a etapa agora. Tente novamente.",
+          );
         } else toast.error(message);
       }
     });
@@ -340,7 +343,8 @@ export function TicketWorkspace({
             <HugeiconsIcon data-icon="inline-start" icon={StopIcon} /> Parar
             atendimento
           </Button>
-        ) : initialContactRecorded || ticket.resolutionCycle > 1 ? (
+        ) : canWorkTicket &&
+          (initialContactRecorded || ticket.resolutionCycle > 1) ? (
           <Button
             disabled={
               pending ||
@@ -367,21 +371,12 @@ export function TicketWorkspace({
             <HugeiconsIcon data-icon="inline-start" icon={PlayIcon} /> Retomar
             atendimento
           </Button>
-        ) : (
-          <Button
-            disabled={
-              pending ||
-              triageSyncBlocked ||
-              ["NEW", "TRIAGE", "RESOLVED", "CLOSED", "CANCELLED"].includes(
-                ticket.status,
-              )
-            }
-            onClick={() => setContactDialogOpen(true)}
-          >
+        ) : ticket.status === "IN_PROGRESS" ? (
+          <Button disabled={pending} onClick={() => setContactDialogOpen(true)}>
             <HugeiconsIcon data-icon="inline-start" icon={PlayIcon} /> Registrar
             contato inicial
           </Button>
-        )}
+        ) : null}
       </div>
 
       <Dialog open={contactDialogOpen} onOpenChange={setContactDialogOpen}>
@@ -389,8 +384,8 @@ export function TicketWorkspace({
           <DialogHeader>
             <DialogTitle>Registrar contato inicial</DialogTitle>
             <DialogDescription>
-              Esta informação será registrada no histórico do ticket e enviada
-              ao Zeev ao concluir a tarefa de Contato inicial.
+              Esta informação será registrada no histórico e ficará disponível
+              para o solicitante.
             </DialogDescription>
           </DialogHeader>
           <Field>
@@ -405,7 +400,7 @@ export function TicketWorkspace({
               disabled={pending}
             />
             <FieldDescription>
-              O solicitante poderá visualizar esta mensagem no processo do Zeev.
+              O solicitante poderá visualizar esta mensagem no acompanhamento.
             </FieldDescription>
           </Field>
           <DialogFooter>
@@ -455,7 +450,8 @@ export function TicketWorkspace({
           <CardHeader>
             <CardTitle>Aprovar triagem</CardTitle>
             <CardDescription>
-              Confirme a classificação e o responsável antes de iniciar o atendimento.
+              Confirme a classificação e o responsável antes de iniciar o
+              atendimento.
             </CardDescription>
           </CardHeader>
           <CardContent className="flex flex-col gap-5">
@@ -584,8 +580,8 @@ export function TicketWorkspace({
             <CardTitle>Aprovação da conclusão</CardTitle>
             <CardDescription>
               {internalApprovalReady
-                ? "A tarefa Aprovar conclusão está pronta no Zeev. Confirme-a aqui para encaminhar o ticket à validação do solicitante."
-                : "A conclusão foi enviada ao Zeev. Aguarde o processo chegar à tarefa Aprovar conclusão."}
+                ? "A etapa de aprovação está disponível. Confirme-a para encaminhar o ticket à validação do solicitante."
+                : "Aguardando a liberação da etapa de aprovação."}
             </CardDescription>
           </CardHeader>
           {internalApprovalReady && (
@@ -606,7 +602,7 @@ export function TicketWorkspace({
                           }),
                         },
                       ),
-                    "Conclusão aprovada e sincronizada com o Zeev.",
+                    "Conclusão aprovada.",
                   )
                 }
               >
@@ -623,8 +619,8 @@ export function TicketWorkspace({
             <CardTitle>Revisar desvio</CardTitle>
             <CardDescription>
               {deviationReviewReady
-                ? "A tarefa Verificar desvio está pronta no Zeev. Decida aqui se o solicitante fará uma nova avaliação ou se o ticket será concluído."
-                : "A avaliação baixa foi recebida. Aguarde o processo chegar à tarefa Verificar desvio no Zeev."}
+                ? "A revisão está disponível. Decida se o solicitante fará uma nova avaliação ou se o ticket será concluído."
+                : "Aguardando a liberação da revisão."}
             </CardDescription>
           </CardHeader>
           {deviationReviewReady && (
@@ -647,7 +643,7 @@ export function TicketWorkspace({
                           }),
                         },
                       ),
-                    "Ticket concluído e decisão sincronizada com o Zeev.",
+                    "Ticket concluído.",
                   )
                 }
               >
@@ -670,7 +666,7 @@ export function TicketWorkspace({
                           }),
                         },
                       ),
-                    "Nova avaliação solicitada e sincronização registrada.",
+                    "Nova avaliação solicitada.",
                   )
                 }
               >
@@ -687,7 +683,7 @@ export function TicketWorkspace({
             <CardHeader>
               <CardTitle>Solicitação</CardTitle>
               <CardDescription>
-                Conteúdo recebido do processo do Zeev.
+                Informações fornecidas pelo solicitante.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -701,8 +697,8 @@ export function TicketWorkspace({
             <CardHeader>
               <CardTitle>Comunicação</CardTitle>
               <CardDescription>
-                Comentários externos são sincronizáveis; notas internas ficam
-                restritas à TI.
+                Comentários externos ficam disponíveis ao solicitante; notas
+                internas ficam restritas à TI.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
@@ -915,209 +911,254 @@ export function TicketWorkspace({
 
         <div className="flex flex-col gap-6">
           {isTriageStage && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Classificação</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <Field>
-                <FieldLabel>Prioridade</FieldLabel>
-                <div className="text-sm">
-                  {ticketPriorityLabels[ticket.priority]}
-                </div>
-              </Field>
-              <Field>
-                <FieldLabel>Tipo</FieldLabel>
-                <Select
-                  value={normalizeRequestType(ticket.requestType)}
-                  onValueChange={(value) =>
-                    mutate(
-                      () =>
-                        apiRequest(
-                          `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
-                          {
-                            method: "PATCH",
-                            headers: { "content-type": "application/json" },
-                            body: JSON.stringify({
-                              requestType: value,
-                              version: ticket.version,
-                            }),
-                          },
-                        ),
-                      "Tipo atualizado.",
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {kanbanColumns.map((column) => (
-                      <SelectItem key={column.type} value={column.type}>
-                        {column.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel>Serviço</FieldLabel>
-                <Select
-                  value={ticket.catalogServiceId ?? "none"}
-                  onValueChange={(value) =>
-                    mutate(
-                      () =>
-                        apiRequest(
-                          `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
-                          {
-                            method: "PATCH",
-                            headers: { "content-type": "application/json" },
-                            body: JSON.stringify({
-                              catalogServiceId: value === "none" ? null : value,
-                              version: ticket.version,
-                            }),
-                          },
-                        ),
-                      "Serviço atualizado.",
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue>
-                      {(value) =>
-                        value === "none"
-                          ? "Não classificado"
-                          : (services.find((item) => item.id === value)?.name ??
-                            ticket.catalogService?.name ??
-                            "Selecionar")
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Não classificado</SelectItem>
-                    {services.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.group.name} · {item.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel>Grupo de serviços</FieldLabel>
-                <Select
-                  value={ticket.serviceGroup?.trim() || "none"}
-                  onValueChange={(value) =>
-                    mutate(
-                      () =>
-                        apiRequest(
-                          `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
-                          {
-                            method: "PATCH",
-                            headers: { "content-type": "application/json" },
-                            body: JSON.stringify({
-                              serviceGroup: value === "none" ? null : value,
-                              version: ticket.version,
-                            }),
-                          },
-                        ),
-                      "Grupo de serviços atualizado.",
-                    )
-                  }
-                >
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Não classificado</SelectItem>
-                    {serviceGroups.map((group) => (
-                      <SelectItem key={group} value={group}>{group}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              <Field>
-                <FieldLabel>Centro de custo</FieldLabel>
-                <Select
-                  value={ticket.costCenterId ?? "none"}
-                  onValueChange={(value) =>
-                    mutate(
-                      () =>
-                        apiRequest(
-                          `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
-                          {
-                            method: "PATCH",
-                            headers: { "content-type": "application/json" },
-                            body: JSON.stringify({
-                              costCenterId: value === "none" ? null : value,
-                              version: ticket.version,
-                            }),
-                          },
-                        ),
-                      "Centro de custo atualizado.",
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue>
-                      {(value) =>
-                        value === "none"
-                          ? "Centro de custo pendente"
-                          : (costCenters.find((item) => item.id === value)
-                              ?.name ?? "Selecionar centro de custo")
-                      }
-                    </SelectValue>
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">
-                      Pendente de classificação
-                    </SelectItem>
-                    {costCenters.map((item) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.name} · {item.code}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </Field>
-              {isZeevServiceGroup && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Classificação</CardTitle>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
                 <Field>
-                  <FieldLabel htmlFor="triage-application">Aplicativo ou processo</FieldLabel>
-                  <Input
-                    id="triage-application"
-                    defaultValue={ticket.applicationOrProcess ?? ""}
-                    onBlur={(event) => {
-                      if (event.currentTarget.value === (ticket.applicationOrProcess ?? "")) return;
-                      mutate(
-                        () => apiRequest(`/api/v1/gestec-help-desk/tickets/${ticket.id}`, {
-                          method: "PATCH", headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ applicationOrProcess: event.currentTarget.value || null, version: ticket.version }),
-                        }),
-                        "Aplicativo atualizado.",
-                      );
-                    }}
-                  />
+                  <FieldLabel>Prioridade</FieldLabel>
+                  <div className="text-sm">
+                    {ticketPriorityLabels[ticket.priority]}
+                  </div>
                 </Field>
-              )}
-              {isInterruption && (
                 <Field>
-                  <FieldLabel htmlFor="triage-asset-code">Código do equipamento ou infraestrutura</FieldLabel>
-                  <Input
-                    id="triage-asset-code"
-                    defaultValue={ticket.assetCode ?? ""}
-                    onBlur={(event) => {
-                      if (event.currentTarget.value === (ticket.assetCode ?? "")) return;
+                  <FieldLabel>Tipo</FieldLabel>
+                  <Select
+                    value={normalizeRequestType(ticket.requestType)}
+                    onValueChange={(value) =>
                       mutate(
-                        () => apiRequest(`/api/v1/gestec-help-desk/tickets/${ticket.id}`, {
-                          method: "PATCH", headers: { "content-type": "application/json" },
-                          body: JSON.stringify({ assetCode: event.currentTarget.value || null, version: ticket.version }),
-                        }),
-                        "Informação de infraestrutura atualizada.",
-                      );
-                    }}
-                  />
+                        () =>
+                          apiRequest(
+                            `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
+                            {
+                              method: "PATCH",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({
+                                requestType: value,
+                                version: ticket.version,
+                              }),
+                            },
+                          ),
+                        "Tipo atualizado.",
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {kanbanColumns.map((column) => (
+                        <SelectItem key={column.type} value={column.type}>
+                          {column.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </Field>
-              )}
-            </CardContent>
-          </Card>
+                <Field>
+                  <FieldLabel>Serviço</FieldLabel>
+                  <Select
+                    value={ticket.catalogServiceId ?? "none"}
+                    onValueChange={(value) =>
+                      mutate(
+                        () =>
+                          apiRequest(
+                            `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
+                            {
+                              method: "PATCH",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({
+                                catalogServiceId:
+                                  value === "none" ? null : value,
+                                version: ticket.version,
+                              }),
+                            },
+                          ),
+                        "Serviço atualizado.",
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue>
+                        {(value) =>
+                          value === "none"
+                            ? "Não classificado"
+                            : (services.find((item) => item.id === value)
+                                ?.name ??
+                              ticket.catalogService?.name ??
+                              "Selecionar")
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não classificado</SelectItem>
+                      {services
+                        .filter(
+                          (item) =>
+                            !ticket.serviceGroup ||
+                            item.group.name === ticket.serviceGroup ||
+                            item.id === ticket.catalogServiceId,
+                        )
+                        .map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            {item.group.name} · {item.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel>Grupo de serviços</FieldLabel>
+                  <Select
+                    value={ticket.serviceGroup?.trim() || "none"}
+                    onValueChange={(value) =>
+                      mutate(
+                        () =>
+                          apiRequest(
+                            `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
+                            {
+                              method: "PATCH",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({
+                                serviceGroup: value === "none" ? null : value,
+                                catalogServiceId: null,
+                                version: ticket.version,
+                              }),
+                            },
+                          ),
+                        "Grupo de serviços atualizado.",
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Não classificado</SelectItem>
+                      {serviceGroups.map((group) => (
+                        <SelectItem key={group} value={group}>
+                          {group}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                <Field>
+                  <FieldLabel>Centro de custo</FieldLabel>
+                  <Select
+                    value={ticket.costCenterId ?? "none"}
+                    onValueChange={(value) =>
+                      mutate(
+                        () =>
+                          apiRequest(
+                            `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
+                            {
+                              method: "PATCH",
+                              headers: { "content-type": "application/json" },
+                              body: JSON.stringify({
+                                costCenterId: value === "none" ? null : value,
+                                version: ticket.version,
+                              }),
+                            },
+                          ),
+                        "Centro de custo atualizado.",
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue>
+                        {(value) =>
+                          value === "none"
+                            ? "Centro de custo pendente"
+                            : (costCenters.find((item) => item.id === value)
+                                ?.name ?? "Selecionar centro de custo")
+                        }
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">
+                        Pendente de classificação
+                      </SelectItem>
+                      {costCenters.map((item) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.name} · {item.code}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </Field>
+                {classification.showApplicationOrProcess && (
+                  <Field>
+                    <FieldLabel htmlFor="triage-application">
+                      Aplicativo ou processo
+                    </FieldLabel>
+                    <Input
+                      id="triage-application"
+                      defaultValue={ticket.applicationOrProcess ?? ""}
+                      onBlur={(event) => {
+                        if (
+                          event.currentTarget.value ===
+                          (ticket.applicationOrProcess ?? "")
+                        )
+                          return;
+                        mutate(
+                          () =>
+                            apiRequest(
+                              `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
+                              {
+                                method: "PATCH",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({
+                                  applicationOrProcess:
+                                    event.currentTarget.value || null,
+                                  version: ticket.version,
+                                }),
+                              },
+                            ),
+                          "Aplicativo atualizado.",
+                        );
+                      }}
+                    />
+                  </Field>
+                )}
+                {classification.showAssetCode && (
+                  <Field>
+                    <FieldLabel htmlFor="triage-asset-code">
+                      {normalizeRequestType(ticket.requestType) ===
+                      "interrupcao_servico"
+                        ? "Código do equipamento ou infraestrutura"
+                        : "Código do bem ou equipamento"}
+                    </FieldLabel>
+                    <Input
+                      id="triage-asset-code"
+                      defaultValue={ticket.assetCode ?? ""}
+                      onBlur={(event) => {
+                        if (
+                          event.currentTarget.value === (ticket.assetCode ?? "")
+                        )
+                          return;
+                        mutate(
+                          () =>
+                            apiRequest(
+                              `/api/v1/gestec-help-desk/tickets/${ticket.id}`,
+                              {
+                                method: "PATCH",
+                                headers: { "content-type": "application/json" },
+                                body: JSON.stringify({
+                                  assetCode: event.currentTarget.value || null,
+                                  version: ticket.version,
+                                }),
+                              },
+                            ),
+                          "Informação de infraestrutura atualizada.",
+                        );
+                      }}
+                    />
+                  </Field>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           <Card>
@@ -1378,7 +1419,7 @@ export function TicketWorkspace({
           {evaluation && (
             <Card>
               <CardHeader>
-                <CardTitle>Avaliação do Zeev</CardTitle>
+                <CardTitle>Avaliação do solicitante</CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-semibold">{evaluation.score}/10</p>
@@ -1433,9 +1474,8 @@ export function TicketWorkspace({
                     <DialogHeader>
                       <DialogTitle>Finalizar ticket?</DialogTitle>
                       <DialogDescription>
-                        As horas válidas são consolidadas e o Zeev avança as
-                        etapas da TI (contato, atendimento e aprovação interna).
-                        A avaliação permanece com o solicitante no Zeev.
+                        As horas válidas são consolidadas e o ticket segue para
+                        a próxima etapa de validação.
                       </DialogDescription>
                     </DialogHeader>
                     <DialogFooter>
@@ -1462,7 +1502,7 @@ export function TicketWorkspace({
                                       }),
                                     },
                                   ),
-                                "Ticket finalizado e sincronização registrada.",
+                                "Ticket finalizado.",
                               )
                             }
                           />
