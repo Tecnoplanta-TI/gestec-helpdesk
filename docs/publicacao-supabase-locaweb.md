@@ -47,8 +47,8 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
 
 1. Crie um projeto Supabase exclusivo para o Help Desk, inicialmente em
    homologação.
-2. Em **Connect**, copie uma conexão persistente (direta ou **Session Pooler**).
-   Não use o Transaction Pooler para o worker `pg-boss`.
+2. Em **Connect**, copie a conexão direta ou o **Session Pooler na porta 5432**.
+   Não use o Transaction Pooler (porta 6543) para o worker `pg-boss`.
 3. Preencha `deploy/.env.production` a partir de
    `deploy/.env.production.example`, sem versionar o arquivo.
 4. Para executar a migração a partir de uma máquina confiável, defina as duas
