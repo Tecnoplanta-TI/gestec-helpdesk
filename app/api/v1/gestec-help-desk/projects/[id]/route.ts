@@ -27,9 +27,35 @@ export async function PATCH(
         ? normalizeProjectName(input.name)
         : undefined;
       const { hourlyRate, hourlyRateEffectiveFrom, ...projectInput } = input;
+      const code = projectInput.code?.toUpperCase();
+      if (normalizedName || code) {
+        const existing = await tx.manualProject.findFirst({
+          where: {
+            id: { not: id },
+            OR: [
+              ...(normalizedName ? [{ normalizedName }] : []),
+              ...(code ? [{ code }] : []),
+            ],
+          },
+          select: { code: true },
+        });
+        if (existing) {
+          throw new ApiError(
+            409,
+            "PROJECT_ALREADY_EXISTS",
+            existing.code === code
+              ? "Já existe um projeto com este código."
+              : "Já existe um projeto com este nome.",
+          );
+        }
+      }
       const updated = await tx.manualProject.update({
         where: { id },
-        data: { ...projectInput, ...(normalizedName ? { normalizedName } : {}) },
+        data: {
+          ...projectInput,
+          ...(code ? { code } : {}),
+          ...(normalizedName ? { normalizedName } : {}),
+        },
       });
       if (hourlyRate !== undefined && hourlyRateEffectiveFrom) {
         await addProjectHourlyRate(tx, {

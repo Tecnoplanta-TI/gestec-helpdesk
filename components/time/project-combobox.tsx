@@ -73,7 +73,7 @@ export function ProjectCombobox({
             variant="outline"
             disabled={disabled}
             className="min-w-0 flex-1 justify-between font-normal"
-            aria-label="Projeto"
+            aria-label="Centro de custo ou projeto"
           />
         }
       >

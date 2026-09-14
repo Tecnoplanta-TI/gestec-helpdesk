@@ -28,12 +28,16 @@ import {
   deleteCostCenter,
   deleteManualProject,
 } from "@/lib/domain/catalog-delete";
+import { listProjectCatalog } from "@/lib/domain/projects";
 import { prisma } from "@/lib/prisma";
 
 const runId = randomUUID();
 const userId = randomUUID();
 const externalReference = `TEST-${runId}`;
 const costCenterCode = `T${runId.slice(0, 7)}`;
+const projectCodeBase = `${Date.now()}${runId.replace(/\D/g, "")}`;
+const privateProjectCode = `PRO-${projectCodeBase}1`;
+const unusedProjectCode = `PRO-${projectCodeBase}2`;
 const previousContactTaskCode = process.env.ZEEV_TASK_CONTACT_CODE;
 const previousServiceTaskCode = process.env.ZEEV_TASK_SERVICE_CODE;
 const previousApproveTaskCode = process.env.ZEEV_TASK_APPROVE_CODE;
@@ -71,6 +75,7 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
       costCenterId = costCenter.id;
       const project = await prisma.manualProject.create({
         data: {
+          code: privateProjectCode,
           name: `Privado ${runId}`,
           normalizedName: `privado-${runId}`,
           color: "#10b981",
@@ -95,6 +100,9 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
         await prisma.ticket.deleteMany({ where: { id: ticketId } });
       }
       await prisma.activeTimer.deleteMany({ where: { userId } });
+      await prisma.projectHourlyRate.deleteMany({
+        where: { manualProjectId: privateProjectId },
+      });
       await prisma.auditEvent.deleteMany({ where: { actorId: userId } });
       await prisma.costCenter.deleteMany({ where: { id: costCenterId } });
       await prisma.manualProject.deleteMany({
@@ -144,14 +152,18 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
         },
         assignment: {},
       };
-      const first = await receiveZeevTicket(payload);
-      const replay = await receiveZeevTicket(payload);
-      ticketId = first.ticket.id;
-      expect(first.replay).toBe(false);
-      expect(replay.replay).toBe(true);
-      expect(replay.ticket.id).toBe(first.ticket.id);
-      expect(first.ticket.costCenterId).toBe(costCenterId);
-      expect(first.ticket.status).toBe(TicketStatus.TRIAGE);
+      const deliveries = await Promise.all([
+        receiveZeevTicket(payload),
+        receiveZeevTicket(payload),
+      ]);
+      const first = deliveries.find((delivery) => !delivery.replay);
+      const replay = deliveries.find((delivery) => delivery.replay);
+      expect(first).toBeDefined();
+      expect(replay).toBeDefined();
+      ticketId = first!.ticket.id;
+      expect(replay!.ticket.id).toBe(first!.ticket.id);
+      expect(first!.ticket.costCenterId).toBe(costCenterId);
+      expect(first!.ticket.status).toBe(TicketStatus.TRIAGE);
 
       // The API-level triage approval is covered separately. Advance this
       // end-to-end scenario to the post-triage state so it can exercise work,
@@ -225,18 +237,35 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
       expect(entries).toHaveLength(1);
       expect(entries[0].durationSeconds).toBe(60);
 
-      await receiveZeevStageReady({
-        schemaVersion: "1.0",
-        event: "ticket.stage_ready",
-        idempotencyKey: `zeev:${runId}:approval-ready:1`,
-        source: {
-          system: "zeev",
-          processName: "Abertura de Ticket T.I",
-          instanceId: runId,
-        },
-        ticket: { externalReference },
-        stage: "INTERNAL_APPROVAL",
-      });
+      const stageDeliveries = await Promise.all([
+        receiveZeevStageReady({
+          schemaVersion: "1.0",
+          event: "ticket.stage_ready",
+          idempotencyKey: `zeev:${runId}:approval-ready:1`,
+          source: {
+            system: "zeev",
+            processName: "Abertura de Ticket T.I",
+            instanceId: runId,
+          },
+          ticket: { externalReference },
+          stage: "INTERNAL_APPROVAL",
+        }),
+        receiveZeevStageReady({
+          schemaVersion: "1.0",
+          event: "ticket.stage_ready",
+          idempotencyKey: `zeev:${runId}:approval-ready:1`,
+          source: {
+            system: "zeev",
+            processName: "Abertura de Ticket T.I",
+            instanceId: runId,
+          },
+          ticket: { externalReference },
+          stage: "INTERNAL_APPROVAL",
+        }),
+      ]);
+      expect(
+        stageDeliveries.filter((delivery) => delivery.replay),
+      ).toHaveLength(1);
       const waitingApproval = await prisma.ticket.findUniqueOrThrow({
         where: { id: ticketId },
       });
@@ -264,8 +293,12 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
         justification: "A falha voltou.",
         expectationMet: false,
       };
-      const result = await receiveZeevEvaluation(payload);
-      const replay = await receiveZeevEvaluation(payload);
+      const deliveries = await Promise.all([
+        receiveZeevEvaluation(payload),
+        receiveZeevEvaluation(payload),
+      ]);
+      const result = deliveries.find((delivery) => !delivery.replay)!;
+      const replay = deliveries.find((delivery) => delivery.replay)!;
       expect(result.ticket.status).toBe(TicketStatus.REOPENED_LOW_SCORE);
       expect(result.ticket.resolutionCycle).toBe(2);
       expect(result.routedToAssigneeId).toBe(userId);
@@ -280,18 +313,35 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
     });
 
     it("sincroniza a revisão de desvio antes de solicitar nova avaliação", async () => {
-      await receiveZeevStageReady({
-        schemaVersion: "1.0",
-        event: "ticket.stage_ready",
-        idempotencyKey: `zeev:${runId}:deviation-ready:2`,
-        source: {
-          system: "zeev",
-          processName: "Abertura de Ticket T.I",
-          instanceId: runId,
-        },
-        ticket: { externalReference },
-        stage: "DEVIATION_REVIEW",
-      });
+      const stageDeliveries = await Promise.all([
+        receiveZeevStageReady({
+          schemaVersion: "1.0",
+          event: "ticket.stage_ready",
+          idempotencyKey: `zeev:${runId}:deviation-ready:2`,
+          source: {
+            system: "zeev",
+            processName: "Abertura de Ticket T.I",
+            instanceId: runId,
+          },
+          ticket: { externalReference },
+          stage: "DEVIATION_REVIEW",
+        }),
+        receiveZeevStageReady({
+          schemaVersion: "1.0",
+          event: "ticket.stage_ready",
+          idempotencyKey: `zeev:${runId}:deviation-ready:2`,
+          source: {
+            system: "zeev",
+            processName: "Abertura de Ticket T.I",
+            instanceId: runId,
+          },
+          ticket: { externalReference },
+          stage: "DEVIATION_REVIEW",
+        }),
+      ]);
+      expect(
+        stageDeliveries.filter((delivery) => delivery.replay),
+      ).toHaveLength(1);
       const current = await prisma.ticket.findUniqueOrThrow({
         where: { id: ticketId },
       });
@@ -310,8 +360,12 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
         score: 9,
         expectationMet: true,
       };
-      const result = await receiveZeevEvaluation(payload);
-      const replay = await receiveZeevEvaluation(payload);
+      const deliveries = await Promise.all([
+        receiveZeevEvaluation(payload),
+        receiveZeevEvaluation(payload),
+      ]);
+      const result = deliveries.find((delivery) => !delivery.replay)!;
+      const replay = deliveries.find((delivery) => delivery.replay)!;
       const evaluations = await prisma.ticketEvaluation.findMany({
         where: { ticketId },
         orderBy: { resolutionCycle: "asc" },
@@ -396,6 +450,47 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
       ).rejects.toMatchObject({ status: 403, code: "PROJECT_FORBIDDEN" });
     });
 
+    it("exibe no catálogo somente o valor-hora já vigente", async () => {
+      const now = new Date();
+      const today = new Date(
+        Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
+      );
+      const yesterday = new Date(today);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
+      const tomorrow = new Date(today);
+      tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+      await prisma.projectHourlyRate.createMany({
+        data: [
+          {
+            manualProjectId: privateProjectId,
+            amountCents: 9_500,
+            effectiveFrom: yesterday,
+            createdById: userId,
+          },
+          {
+            manualProjectId: privateProjectId,
+            amountCents: 12_000,
+            effectiveFrom: tomorrow,
+            createdById: userId,
+          },
+        ],
+      });
+
+      const catalog = await listProjectCatalog({
+        includePrivateManual: true,
+        includeInactive: true,
+      });
+      const project = catalog.find(
+        (item) => item.id === `manual:${privateProjectId}`,
+      );
+
+      expect(project).toMatchObject({
+        hourlyRateCents: 9_500,
+        hourlyRateEffectiveFrom: yesterday,
+        latestHourlyRateEffectiveFrom: tomorrow,
+      });
+    });
+
     it("exclui cadastros sem histórico e bloqueia os que já foram usados", async () => {
       const unusedCenter = await prisma.costCenter.create({
         data: {
@@ -406,6 +501,7 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
       });
       const unusedProject = await prisma.manualProject.create({
         data: {
+          code: unusedProjectCode,
           name: `Livre ${runId}`,
           normalizedName: `livre-manual-${runId}`,
           color: "#6366f1",

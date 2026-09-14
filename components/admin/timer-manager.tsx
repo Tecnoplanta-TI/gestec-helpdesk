@@ -54,7 +54,7 @@ export function AdminTimerManager({ timers }: { timers: AdminTimer[] }) {
           <TableRow>
             <TableHead>Pessoa</TableHead>
             <TableHead>Descrição</TableHead>
-            <TableHead>Projeto</TableHead>
+            <TableHead>Centro de custo / projeto</TableHead>
             <TableHead>Início</TableHead>
             <TableHead className="text-right">Ações</TableHead>
           </TableRow>

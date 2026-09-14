@@ -3,6 +3,7 @@ import { addMonths, startOfMonth } from "date-fns";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
 import { monthlyGoalSeconds } from "@/lib/domain/time-goals";
+import { effectiveGoalSecondsByUser } from "@/lib/domain/effective-goals";
 import { listTeamMonthHours } from "@/lib/domain/team-time";
 import {
   operationalTimeWhere,
@@ -70,14 +71,27 @@ export default async function JornadaPainelPage({
       }),
     ]);
 
+  const fallbackGoalSeconds = monthlyGoalSeconds(now);
+  const goalSecondsByUser = await effectiveGoalSecondsByUser(
+    [session.userId, ...team.map((member) => member.userId)],
+    now,
+    fallbackGoalSeconds,
+  );
+
   return (
     <TimeDashboard
       todaySeconds={todayEntries._sum.durationSeconds ?? 0}
       weekSeconds={weekEntries._sum.durationSeconds ?? 0}
       monthSeconds={monthEntries._sum.durationSeconds ?? 0}
       billableSeconds={monthBillable._sum.durationSeconds ?? 0}
-      monthlyGoalSeconds={monthlyGoalSeconds(now)}
-      team={team}
+      monthlyGoalSeconds={
+        goalSecondsByUser.get(session.userId) ?? fallbackGoalSeconds
+      }
+      team={team.map((member) => ({
+        ...member,
+        goalSeconds:
+          goalSecondsByUser.get(member.userId) ?? fallbackGoalSeconds,
+      }))}
     />
   );
 }

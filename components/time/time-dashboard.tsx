@@ -12,6 +12,7 @@ type Member = {
   userId: string;
   name: string;
   seconds: number;
+  goalSeconds: number;
 };
 
 export function TimeDashboard({
@@ -99,7 +100,7 @@ export function TimeDashboard({
             team.map((member) => {
               const percent = goalProgressPercent(
                 member.seconds,
-                monthlyGoalSeconds,
+                member.goalSeconds,
               );
               return (
                 <div key={member.userId} className="flex flex-col gap-2">

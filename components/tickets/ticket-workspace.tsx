@@ -255,8 +255,9 @@ export function TicketWorkspace({
     const failed = ticket.syncExecutions.filter(
       (item) => item.status === "FAILED",
     );
-    if (failed.length)
-      console.error("Falhas de sincronização do ticket", failed);
+    if (failed.length) {
+      console.info("[Zeev] Falhas de sincronização do ticket", failed);
+    }
   }, [ticket.syncExecutions]);
 
   function mutate(action: () => Promise<unknown>, success: string) {
@@ -269,7 +270,7 @@ export function TicketWorkspace({
         const message =
           error instanceof Error ? error.message : "Não foi possível concluir a ação.";
         if (/zeev|sincroniza/i.test(message)) {
-          console.error("Falha de sincronização do ticket", error);
+          console.info("[Zeev] Falha de sincronização do ticket", error);
           toast.error("Não foi possível concluir a etapa agora. Tente novamente.");
         } else toast.error(message);
       }

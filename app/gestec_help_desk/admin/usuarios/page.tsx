@@ -1,11 +1,11 @@
 import { AdminUserManager } from "@/components/admin/user-manager";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePagePermission } from "@/lib/auth/page-session";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminUsersPage() {
-  const session = await requirePermission("admin:manage");
+  const session = await requirePagePermission("admin:manage");
   const users = await prisma.userRef.findMany({
     orderBy: [{ active: "desc" }, { name: "asc" }],
   });

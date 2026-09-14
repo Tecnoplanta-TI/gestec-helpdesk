@@ -35,7 +35,8 @@ export async function GET(request: Request) {
       { header: "Fim", key: "end", width: 20 },
       { header: "Duração (h)", key: "duration", width: 14 },
       { header: "Descrição", key: "description", width: 44 },
-      { header: "Projeto", key: "project", width: 28 },
+      { header: "Centro de custo", key: "costCenter", width: 28 },
+      { header: "Projeto Semear", key: "project", width: 28 },
       { header: "Ticket", key: "ticket", width: 16 },
       { header: "Usuário", key: "user", width: 24 },
       { header: "Faturável", key: "billable", width: 13 },
@@ -43,7 +44,7 @@ export async function GET(request: Request) {
       { header: "Status", key: "status", width: 24 },
     ];
     sheet.getRow(1).font = { bold: true };
-    sheet.autoFilter = { from: "A1", to: "K1" };
+    sheet.autoFilter = { from: "A1", to: "L1" };
     for (const entry of entries) {
       sheet.addRow({
         date: entry.startedAt.toLocaleDateString("pt-BR"),
@@ -51,7 +52,12 @@ export async function GET(request: Request) {
         end: entry.endedAt,
         duration: entry.durationSeconds / 3600,
         description: safeCell(entry.description),
-        project: safeCell(entry.projectNameSnapshot),
+        costCenter: entry.costCenterId
+          ? safeCell(entry.projectNameSnapshot)
+          : "",
+        project: entry.manualProjectId
+          ? safeCell(entry.projectNameSnapshot)
+          : "",
         ticket: entry.ticket ? `#${entry.ticket.number}` : "",
         user: safeCell(entry.user.name),
         billable: entry.billable ? "Sim" : "Não",

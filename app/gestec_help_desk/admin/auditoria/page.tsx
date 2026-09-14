@@ -9,7 +9,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePagePermission } from "@/lib/auth/page-session";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +21,7 @@ export default async function AdminAuditPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requirePermission("admin:manage");
+  await requirePagePermission("admin:manage");
   const params = await searchParams;
   const requestedPage = Number(
     typeof params.page === "string" ? params.page : 1,

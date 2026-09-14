@@ -20,15 +20,10 @@ export type TeamListItem = {
   name: string;
   email: string;
   seconds: number;
+  goalSeconds: number;
 };
 
-export function TeamList({
-  members,
-  monthlyGoalSeconds,
-}: {
-  members: TeamListItem[];
-  monthlyGoalSeconds: number;
-}) {
+export function TeamList({ members }: { members: TeamListItem[] }) {
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -69,7 +64,7 @@ export function TeamList({
                     {formatHoursMinutes(member.seconds)}
                   </TableCell>
                   <TableCell className="tabular-nums">
-                    {goalProgressPercent(member.seconds, monthlyGoalSeconds)}%
+                    {goalProgressPercent(member.seconds, member.goalSeconds)}%
                   </TableCell>
                 </TableRow>
               ))}

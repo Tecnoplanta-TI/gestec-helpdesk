@@ -74,6 +74,18 @@ async function resolveLocalSession(identity: GestecIdentity) {
     cached.fingerprint === fingerprint &&
     Date.now() - cached.at <= USER_SYNC_TTL_MS
   ) {
+    const current = await prisma.userRef.findUnique({
+      where: { id: cached.session.userId },
+      select: { active: true },
+    });
+    if (!current?.active) {
+      syncedUsers.delete(identity.externalId);
+      throw new ApiError(
+        403,
+        "USER_INACTIVE",
+        "Seu acesso ao Gestec Help Desk está inativo.",
+      );
+    }
     return cached.session;
   }
 
@@ -90,17 +102,25 @@ async function resolveLocalSession(identity: GestecIdentity) {
       );
     }
     const existing = byExternalId ?? byEmail;
-    const data = {
+    const identityData = {
       externalId: identity.externalId,
       name: identity.name,
       email: identity.email,
       role: identity.role,
-      active: true,
     };
     return existing
-      ? tx.userRef.update({ where: { id: existing.id }, data })
-      : tx.userRef.create({ data: { id: randomUUID(), ...data } });
+      ? tx.userRef.update({ where: { id: existing.id }, data: identityData })
+      : tx.userRef.create({
+          data: { id: randomUUID(), ...identityData, active: true },
+        });
   });
+  if (!user.active) {
+    throw new ApiError(
+      403,
+      "USER_INACTIVE",
+      "Seu acesso ao Gestec Help Desk está inativo.",
+    );
+  }
   const session: GestecSession = {
     userId: user.id,
     externalId: user.externalId,

@@ -29,3 +29,46 @@ export function goalProgressPercent(seconds: number, goalSeconds: number) {
   if (goalSeconds <= 0) return 0;
   return Math.min(100, Math.round((seconds / goalSeconds) * 100));
 }
+
+export type GoalCandidate = {
+  targetSeconds: number;
+  targetUserId: string | null;
+  targetGroup: { members: Array<{ userId: string }> } | null;
+};
+
+export function selectEffectiveGoalSeconds(
+  userIds: string[],
+  goals: GoalCandidate[],
+  fallbackSeconds: number,
+) {
+  const result = new Map(userIds.map((userId) => [userId, fallbackSeconds]));
+  const individualUsers = new Set<string>();
+
+  for (const goal of goals) {
+    if (
+      goal.targetUserId &&
+      result.has(goal.targetUserId) &&
+      !individualUsers.has(goal.targetUserId)
+    ) {
+      result.set(goal.targetUserId, goal.targetSeconds);
+      individualUsers.add(goal.targetUserId);
+    }
+  }
+
+  const usersWithGroupGoal = new Set<string>();
+  for (const goal of goals) {
+    if (goal.targetUserId || !goal.targetGroup) continue;
+    for (const member of goal.targetGroup.members) {
+      if (
+        result.has(member.userId) &&
+        !individualUsers.has(member.userId) &&
+        !usersWithGroupGoal.has(member.userId)
+      ) {
+        result.set(member.userId, goal.targetSeconds);
+        usersWithGroupGoal.add(member.userId);
+      }
+    }
+  }
+
+  return result;
+}

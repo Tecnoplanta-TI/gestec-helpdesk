@@ -35,7 +35,6 @@ export default async function JornadaPage({
 
   const [
     projects,
-    managedProjects,
     activeTimer,
     entries,
     todayEntries,
@@ -43,19 +42,6 @@ export default async function JornadaPage({
     workPeriods,
   ] = await Promise.all([
     listProjects(undefined, { includePrivateManual }),
-    includePrivateManual
-      ? prisma.manualProject.findMany({
-          select: {
-            id: true,
-            name: true,
-            color: true,
-            availableToAll: true,
-            active: true,
-            billableByDefault: true,
-          },
-          orderBy: [{ active: "desc" }, { name: "asc" }],
-        })
-      : Promise.resolve([]),
     prisma.activeTimer.findUnique({ where: { userId: session.userId } }),
     prisma.timeEntry.findMany({
       where: listWhere,
@@ -154,17 +140,6 @@ export default async function JornadaPage({
   return (
     <TimeWorkspace
       projects={projects}
-      managedProjects={managedProjects.map((project) => {
-        return {
-          id: `manual:${project.id}`,
-          name: project.name,
-          code: null,
-          color: project.color,
-          availableToAll: project.availableToAll,
-          active: project.active,
-          billableByDefault: project.billableByDefault,
-        };
-      })}
       recentProjectIds={recentProjectIds}
       activeTimer={
         activeTimer

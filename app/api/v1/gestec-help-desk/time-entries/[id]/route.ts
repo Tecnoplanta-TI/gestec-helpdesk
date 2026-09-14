@@ -5,6 +5,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
 import { auditSnapshot } from "@/lib/domain/audit";
 import { getProject } from "@/lib/domain/projects";
+import { findProjectHourlyRateCents } from "@/lib/domain/project-rates";
 import { ApiError, errorResponse, readJson } from "@/lib/http/api-error";
 import { prisma } from "@/lib/prisma";
 
@@ -87,6 +88,14 @@ export async function PATCH(
       const project = input.projectId
         ? await getProject(input.projectId, session.userId, tx)
         : null;
+      const targetManualProjectId = project
+        ? project.kind === "MANUAL"
+          ? project.id
+          : null
+        : entry.manualProjectId;
+      const hourlyRateCentsSnapshot = targetManualProjectId
+        ? await findProjectHourlyRateCents(tx, targetManualProjectId, startedAt)
+        : null;
       const result = await tx.timeEntry.updateMany({
         where: { id, version: input.version },
         data: {
@@ -95,6 +104,7 @@ export async function PATCH(
           startedAt,
           endedAt,
           durationSeconds,
+          hourlyRateCentsSnapshot,
           correctionReason: input.correctionReason,
           ...(project
             ? {

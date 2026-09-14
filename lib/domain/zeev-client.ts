@@ -507,6 +507,7 @@ export async function dispatchZeevApi(execution: SyncRow) {
     data: {
       status: SyncStatus.SUCCEEDED,
       attempts: { increment: 1 },
+      processingStartedAt: null,
       response: responses as Prisma.InputJsonValue,
       lastError: null,
     },

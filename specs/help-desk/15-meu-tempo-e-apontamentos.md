@@ -68,7 +68,7 @@ Projeto
 ### 3.3 Projeto Semear (`CONFIRMED`)
 
 - É criado pelo dialog **Criar projeto** para iniciativas do programa Semear.
-- Campos: nome, cor de identificação, disponível para todos quando permitido pelo RBAC, faturável por padrão, valor-hora e status ativo.
+- Campos: código obrigatório no formato `PRO-<número>` (ex.: `PRO-0001`), nome, cor de identificação, disponível para todos quando permitido pelo RBAC, faturável por padrão, valor-hora e status ativo.
 - Uma alteração de valor-hora exige a data a partir da qual o novo valor vale; valores anteriores são preservados.
 - Somente usuário autorizado visualiza a ação de criação e pode editar, ativar ou arquivar.
 - Projeto manual arquivado não aparece em novos registros e permanece no histórico, relatórios e exportações.
@@ -138,7 +138,7 @@ Usar botão de ícone equivalente a `CircleDollarSign`, nunca um campo textual l
 
 ### 5.1 Seletor (`CONFIRMED`)
 
-- Lista centros de custo ativos e projetos manuais ativos na mesma coleção visual.
+- Lista somente Projetos Semear ativos; clientes/centros de custo são administrados e exibidos em seu próprio cadastro.
 - Pesquisa por nome ou código, oferece **Recentes** e **Todos os projetos** e elimina duplicatas por identidade estável.
 - Abrir o seletor ou dialog não apaga a descrição digitada.
 - Usuário autorizado vê **Criar projeto**; usuário sem permissão apenas pesquisa e seleciona.
@@ -147,8 +147,8 @@ Usar botão de ícone equivalente a `CircleDollarSign`, nunca um campo textual l
 ### 5.2 Dialog Criar projeto (`CONFIRMED`)
 
 - Título **Criar projeto**, botão Fechar, ação secundária **Cancelar** e ação principal **Criar projeto**.
-- Labels acima de Nome do projeto, Cor de identificação, Disponível para todos, Faturável por padrão e Status ativo.
-- Nome é obrigatório; duplicidade normalizada por nome/código é rejeitada com mensagem junto ao campo.
+- Labels acima de Código do projeto, Nome do projeto, Cor de identificação, Disponível para todos, Faturável por padrão e Status ativo.
+- Código no formato `PRO-<número>` e nome são obrigatórios; duplicidade por nome ou código é rejeitada com mensagem junto ao campo.
 - **Criar projeto** permanece desabilitado enquanto inválido ou durante salvamento.
 - Loading impede envio duplicado; erro preserva dados; sucesso emite feedback.
 - Fechar com alterações não salvas exige confirmação.
@@ -274,30 +274,30 @@ Então deve existir somente um apontamento resultante
 - `BR-1520` falha não publica arquivo parcial.
 - `BR-1521` CSV não substitui esta entrega.
 
-### HD-US-1506 — Selecionar projeto na lista unificada
+### HD-US-1506 — Selecionar Projeto Semear
 
-**Como** técnico, **quero** pesquisar uma lista única de projetos, **para** classificar minhas horas sem compreender detalhes internos.
+**Como** técnico, **quero** pesquisar uma lista única de Projetos Semear, **para** classificar minhas horas por iniciativa.
 
 - `BR-1522` todo novo timer ou lançamento manual exige exatamente um projeto ativo.
-- `BR-1523` seletor não separa nem identifica visualmente a origem técnica.
+- `BR-1523` seletor mostra nome e código `PRO-<número>` do projeto.
 - `BR-1524` itens inativos ou arquivados não aparecem para novo registro.
 - `BR-1525` busca aceita nome ou código e recentes não duplicam itens.
 
 ```gherkin
-Dado que existem centros de custo e projetos manuais ativos
+Dado que existem Projetos Semear ativos
 Quando abrir o seletor
-Então devo encontrá-los juntos em Recentes ou Todos os projetos
-E não devo visualizar badges ou grupos de origem
+Então devo encontrá-los em Recentes ou Todos os projetos
+E devo poder pesquisar por nome ou código
 ```
 
-### HD-US-1507 — Disponibilizar centro de custo como projeto
+### HD-US-1507 — Manter centro de custo separado do projeto
 
-**Como** técnico, **quero** encontrar centros de custo ativos no seletor, **para** classificar horas sem cadastro duplicado.
+**Como** administrador, **quero** manter centros de custo em um cadastro separado, **para** evitar confundi-los com iniciativas Semear.
 
-- `BR-1526` disponibilidade deriva do cadastro de centro de custo no Gestec.
-- `BR-1527` vínculo usa identificador estável.
-- `BR-1528` renomear atualiza a opção sem criar duplicata.
-- `BR-1529` inativar impede uso novo e preserva histórico.
+- `BR-1526` centro de custo permanece no cadastro de clientes do Gestec e não é apresentado como Projeto Semear.
+- `BR-1527` cada centro de custo usa seu código corporativo numérico como referência de negócio.
+- `BR-1528` renomear o centro de custo não altera o Projeto Semear nem cria duplicata.
+- `BR-1529` inativar impede novos vínculos de ticket e preserva histórico.
 
 ### HD-US-1508 — Tratar projeto indisponível no registro manual
 
@@ -307,12 +307,12 @@ E não devo visualizar badges ou grupos de origem
 - `BR-1531` projeto inativado entre seleção e início bloqueia a ação e solicita nova escolha.
 - `BR-1532` falha de lista oferece nova tentativa e preserva descrição.
 
-### HD-US-1509 — Criar projeto manual
+### HD-US-1509 — Criar Projeto Semear
 
-**Como** usuário autorizado, **quero** criar projeto pelo seletor, **para** classificar uma iniciativa sem centro de custo.
+**Como** usuário autorizado, **quero** criar Projeto Semear pelo seletor, **para** classificar uma iniciativa do programa.
 
-- `BR-1533` nome é obrigatório e duplicidade normalizada é rejeitada.
-- `BR-1534` campos de criação são nome, cor, disponibilidade, faturabilidade padrão e status ativo.
+- `BR-1533` código `PRO-<número>` e nome são obrigatórios; duplicidade normalizada por nome ou código é rejeitada.
+- `BR-1534` campos de criação são código, nome, cor, disponibilidade, faturabilidade padrão e status ativo.
 - `BR-1535` usuário sem permissão não visualiza a ação.
 - `BR-1536` loading impede duplicidade e erro preserva valores.
 - `BR-1537` sucesso fecha o dialog, atualiza e seleciona o projeto sem reload e preserva descrição.
@@ -371,7 +371,7 @@ E não devo visualizar badges ou grupos de origem
 
 **Como** técnico, **quero** que os períodos do ticket sejam consolidados em Meu Tempo, **para** não lançar o atendimento novamente.
 
-- `BR-1558` projeto é o centro de custo estável do ticket.
+- `BR-1558` projeto Semear e centro de custo do ticket são identidades distintas e estáveis.
 - `BR-1559` ticket e resumo aparecem na linha, não na barra superior.
 - `BR-1560` apenas períodos válidos participam da duração.
 - `BR-1561` apontamento gerado participa de totais, filtros, relatórios e exportações.
@@ -455,7 +455,7 @@ Autorizações são revalidadas na persistência futura; ocultar botão não sub
 
 | Descoberta | Classificação | Fonte |
 |------------|---------------|-------|
-| Centros de custo são administrados no Gestec e aparecem como projetos | `CONFIRMED` | Pedido funcional de 2026-08-27; Spec 07 |
+| Centros de custo são administrados no Gestec separadamente de Projetos Semear | `CONFIRMED` | Decisão de produto de 2026-09-11; Spec 07 |
 | Lista única, sem Zeev/SemeAR na interface | `CONFIRMED` | Pedido funcional de 2026-08-27 |
 | Projeto manual criado no seletor e selecionado sem reload | `CONFIRMED` | Pedido funcional de 2026-08-27 |
 | Barra sem ticket e faturabilidade por ícone | `CONFIRMED` | Pedido funcional de 2026-08-27 |

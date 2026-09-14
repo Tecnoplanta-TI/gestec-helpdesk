@@ -115,6 +115,7 @@ async function main() {
   const manualProject = await prisma.manualProject.upsert({
     where: { normalizedName: "evolucao da plataforma" },
     create: {
+      code: "PRO-0001",
       name: "Evolução da plataforma",
       normalizedName: "evolucao da plataforma",
       color: "#10b981",

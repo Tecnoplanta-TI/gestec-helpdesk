@@ -161,10 +161,11 @@ apontamentos e comparando os totais apresentados com os registros autorizados qu
   transições e histórico permitido.
 - **FR-005:** Um ativo existente DEVE poder ser relacionado ao ticket por identidade estável sem
   criar um cadastro patrimonial duplicado.
-- **FR-006:** Meu Tempo DEVE permitir timer e lançamento manual, com descrição, projeto,
+- **FR-006:** Meu Tempo DEVE permitir timer e lançamento manual, com descrição, Projeto Semear,
   faturabilidade, períodos válidos, histórico e totais.
-- **FR-007:** Cada novo apontamento manual DEVE possuir exatamente um projeto elegível; centros de
-  custo ativos e projetos manuais ativos DEVEM aparecer no seletor unificado conforme a Spec 15.
+- **FR-007:** Cada novo apontamento manual DEVE possuir exatamente um Projeto Semear elegível,
+  identificado por código `PRO-<número>`; centro de custo é um cadastro independente e não aparece
+  nesse seletor conforme a Spec 15.
 - **FR-008:** Apontamentos gerados por ticket DEVEM consolidar somente períodos válidos por usuário
   e ciclo, sem duplicidade em reprocessamentos.
 - **FR-009:** Histórico, filtros, totais, relatórios e exportações DEVEM aplicar o mesmo período,
@@ -279,7 +280,7 @@ O recurso fica concentrado em **Meu Tempo** e contempla:
 - no máximo um timer ativo por usuário;
 - lançamento manual por data, hora inicial e hora final;
 - descrição da atividade e projeto obrigatório;
-- seletor único de projetos, reunindo centros de custo ativos e projetos manuais ativos;
+- seletor único de Projetos Semear ativos, pesquisável por nome ou código `PRO-<número>`;
 - indicação acessível de hora faturável ou não faturável;
 - histórico agrupado por dia e semana;
 - totais diários, semanais, por projeto e por centro de custo;
@@ -319,10 +320,12 @@ devem ser reaplicadas no acesso aos dados; a interface não é a única barreira
 
 - Períodos trabalhados no atendimento podem originar apontamentos em Meu Tempo.
 - O número do ticket aparece no histórico do apontamento gerado, não na barra de registro manual.
-- O centro de custo do ticket fornece o projeto do apontamento automático.
+- O centro de custo do ticket permanece associado ao apontamento automático como informação de
+  cliente/cobrança; ele não cria nem substitui um Projeto Semear.
 - Finalizações repetidas não podem duplicar horas.
 - Reabertura preserva o ciclo anterior e separa o trabalho novo.
-- Ticket sem centro de custo nunca recebe projeto arbitrário e segue o tratamento documentado na Spec 15.
+- Ticket sem centro de custo nunca recebe cliente ou projeto arbitrário e segue o tratamento
+  documentado na Spec 15.
 
 ## 6. Gestão de ativos de TI
 
@@ -372,7 +375,7 @@ Depreciação contábil, compra e gestão financeira patrimonial não são consi
 | Ticket referencia ativo | O técnico consulta contexto, inventário e histórico permitidos sem duplicar o ativo |
 | Técnico trabalha no ticket | Períodos válidos ficam associados ao usuário e ao ciclo de resolução |
 | Ticket conclui ciclo elegível | O sistema cria ou atualiza apontamentos idempotentes em Meu Tempo |
-| Centro de custo é definido | Torna-se o projeto do apontamento automático e base para totalização |
+| Centro de custo é definido | É associado ao ticket e à base de totalização por cliente, sem virar Projeto Semear |
 | Ativo é entregue ou substituído | O atendimento registra o equipamento e preserva a trilha histórica |
 | Horas e tickets são consolidados | Dashboards, relatórios e exportações respeitam filtros, escopo e autorização |
 
@@ -397,8 +400,8 @@ Depreciação contábil, compra e gestão financeira patrimonial não são consi
 - `TicketAsset`: vínculo histórico entre ticket e ativo.
 - `TimeEntry`: apontamento manual ou gerado por ticket.
 - `TimeSegment`: intervalo válido de trabalho de um usuário.
-- `Project`: classificação apresentada em Meu Tempo.
-- `CostCenter`: centro de custo que também é disponibilizado como projeto.
+- `Project`: iniciativa do programa Semear, identificada por `PRO-<número>`, apresentada em Meu Tempo.
+- `CostCenter`: cliente/centro de custo corporativo, identificado por seu código numérico e independente de Projeto Semear.
 - `SlaClock`: controle dos prazos aplicáveis ao ticket.
 - `AuditEvent`: registro imutável de ações relevantes.
 

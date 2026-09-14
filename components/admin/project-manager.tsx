@@ -7,7 +7,12 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -37,19 +42,39 @@ import { CreateProjectDialog } from "@/components/time/create-project-dialog";
 import { Add01Icon } from "@/lib/icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { apiRequest } from "@/lib/http/client";
-import { formatHoursMinutes } from "@/lib/format";
+import {
+  currentLocalDateValue,
+  formatCurrencyFromCents,
+  formatHoursMinutes,
+} from "@/lib/format";
 
 export type AdminProjectItem = {
   id: string;
-  kind: "cost-center" | "manual";
+  kind: "manual";
   name: string;
   code: string | null;
   color: string | null;
   availableToAll: boolean;
   billableByDefault: boolean;
   active: boolean;
+  hourlyRateCents: number | null;
+  hourlyRateEffectiveFrom: string | Date | null;
+  latestHourlyRateEffectiveFrom: string | Date | null;
   monthSeconds: number;
 };
+
+function nextHourlyRateEffectiveFrom(value: string | Date | null) {
+  const today = currentLocalDateValue();
+  if (!value) return today;
+  const currentDate =
+    typeof value === "string"
+      ? value.slice(0, 10)
+      : value.toISOString().slice(0, 10);
+  const nextDate = new Date(`${currentDate}T00:00:00.000Z`);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+  const nextDateValue = nextDate.toISOString().slice(0, 10);
+  return nextDateValue > today ? nextDateValue : today;
+}
 
 export function AdminProjectManager({
   projects,
@@ -68,6 +93,8 @@ export function AdminProjectManager({
     availableToAll: true,
     billableByDefault: false,
     active: true,
+    hourlyRate: "",
+    hourlyRateEffectiveFrom: currentLocalDateValue(),
   });
 
   function openEditor(project: AdminProjectItem) {
@@ -79,36 +106,35 @@ export function AdminProjectManager({
       availableToAll: project.availableToAll,
       billableByDefault: project.billableByDefault,
       active: project.active,
+      hourlyRate: "",
+      hourlyRateEffectiveFrom: nextHourlyRateEffectiveFrom(
+        project.latestHourlyRateEffectiveFrom,
+      ),
     });
   }
 
   function save() {
     if (!editing) return;
-    const isCostCenter = editing.kind === "cost-center";
-    const id = editing.id.replace(/^(manual:|cost-center:)/, "");
+    const id = editing.id.replace("manual:", "");
     startTransition(async () => {
       try {
-        if (isCostCenter) {
-          await apiRequest(`/api/v1/gestec-help-desk/cost-centers/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({
-              code: form.code.trim(),
-              name: form.name.trim(),
-              active: form.active,
-            }),
-          });
-        } else {
-          await apiRequest(`/api/v1/gestec-help-desk/projects/${id}`, {
-            method: "PATCH",
-            body: JSON.stringify({
-              name: form.name.trim(),
-              color: form.color,
-              availableToAll: form.availableToAll,
-              billableByDefault: form.billableByDefault,
-              active: form.active,
-            }),
-          });
-        }
+        await apiRequest(`/api/v1/gestec-help-desk/projects/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify({
+            code: form.code.trim().toUpperCase(),
+            name: form.name.trim(),
+            color: form.color,
+            availableToAll: form.availableToAll,
+            billableByDefault: form.billableByDefault,
+            active: form.active,
+            ...(form.hourlyRate.trim()
+              ? {
+                  hourlyRate: Number(form.hourlyRate.replace(",", ".")),
+                  hourlyRateEffectiveFrom: form.hourlyRateEffectiveFrom,
+                }
+              : {}),
+          }),
+        });
         toast.success("Projeto atualizado.");
         setEditing(null);
         router.refresh();
@@ -122,19 +148,13 @@ export function AdminProjectManager({
 
   function deleteTarget() {
     if (!deleting) return;
-    const isCostCenter = deleting.kind === "cost-center";
-    const id = deleting.id.replace(/^(manual:|cost-center:)/, "");
+    const id = deleting.id.replace("manual:", "");
     startTransition(async () => {
       try {
-        await apiRequest(
-          isCostCenter
-            ? `/api/v1/gestec-help-desk/cost-centers/${id}`
-            : `/api/v1/gestec-help-desk/projects/${id}`,
-          { method: "DELETE" },
-        );
-        toast.success(
-          isCostCenter ? "Centro de custo excluído." : "Projeto excluído.",
-        );
+        await apiRequest(`/api/v1/gestec-help-desk/projects/${id}`, {
+          method: "DELETE",
+        });
+        toast.success("Projeto excluído.");
         setDeleting(null);
         router.refresh();
       } catch (error) {
@@ -149,7 +169,9 @@ export function AdminProjectManager({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Projetos</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Projetos Semear
+          </h1>
           <p className="text-sm text-muted-foreground">
             Projetos do programa Semear. Clientes são administrados em seu
             próprio cadastro.
@@ -177,8 +199,8 @@ export function AdminProjectManager({
             <TableHeader>
               <TableRow>
                 <TableHead>Projeto</TableHead>
-                <TableHead>Tipo</TableHead>
                 <TableHead>Código</TableHead>
+                <TableHead>Valor-hora atual</TableHead>
                 <TableHead>Horas no mês</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Ações</TableHead>
@@ -199,12 +221,12 @@ export function AdminProjectManager({
                     </span>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
-                    {project.kind === "cost-center"
-                      ? "Centro de custo"
-                      : "Manual"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
                     {project.code ?? "—"}
+                  </TableCell>
+                  <TableCell className="tabular-nums">
+                    {project.hourlyRateCents === null
+                      ? "—"
+                      : formatCurrencyFromCents(project.hourlyRateCents)}
                   </TableCell>
                   <TableCell className="tabular-nums">
                     {formatHoursMinutes(project.monthSeconds)}
@@ -249,13 +271,26 @@ export function AdminProjectManager({
           <SheetHeader>
             <SheetTitle>Editar projeto</SheetTitle>
             <SheetDescription>
-              {editing?.kind === "cost-center"
-                ? "Altere código, nome e status deste centro de custo."
-                : "Altere o cadastro completo do projeto manual, inclusive visibilidade e faturabilidade padrão."}
+              Altere o código, nome, valor-hora, vigência, visibilidade e
+              faturabilidade padrão do projeto Semear.
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-6">
             <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="admin-project-code">Código</FieldLabel>
+                <Input
+                  id="admin-project-code"
+                  value={form.code}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      code: event.target.value.toUpperCase(),
+                    }))
+                  }
+                  placeholder="PRO-0001"
+                />
+              </Field>
               <Field>
                 <FieldLabel htmlFor="admin-project-name">Nome</FieldLabel>
                 <Input
@@ -269,74 +304,102 @@ export function AdminProjectManager({
                   }
                 />
               </Field>
-              {editing?.kind === "cost-center" ? (
+              <Field>
+                <FieldLabel htmlFor="admin-project-hourly-rate">
+                  Novo valor-hora (R$)
+                </FieldLabel>
+                <Input
+                  id="admin-project-hourly-rate"
+                  inputMode="decimal"
+                  value={form.hourlyRate}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      hourlyRate: event.target.value,
+                    }))
+                  }
+                  placeholder="Deixe em branco para manter o valor atual"
+                />
+                <FieldDescription>
+                  {editing?.hourlyRateCents === null ||
+                  editing?.hourlyRateCents === undefined
+                    ? "Nenhum valor-hora registrado."
+                    : `Valor atual: ${formatCurrencyFromCents(editing.hourlyRateCents)}.`}
+                </FieldDescription>
+              </Field>
+              {form.hourlyRate.trim() ? (
                 <Field>
-                  <FieldLabel htmlFor="admin-project-code">Código</FieldLabel>
+                  <FieldLabel htmlFor="admin-project-rate-effective-from">
+                    Válido a partir de
+                  </FieldLabel>
                   <Input
-                    id="admin-project-code"
-                    value={form.code}
+                    id="admin-project-rate-effective-from"
+                    type="date"
+                    value={form.hourlyRateEffectiveFrom}
+                    min={nextHourlyRateEffectiveFrom(
+                      editing?.latestHourlyRateEffectiveFrom ?? null,
+                    )}
                     onChange={(event) =>
                       setForm((current) => ({
                         ...current,
-                        code: event.target.value,
+                        hourlyRateEffectiveFrom: event.target.value,
                       }))
                     }
                   />
                 </Field>
-              ) : (
-                <>
-                  <Field>
-                    <FieldLabel htmlFor="admin-project-color">
-                      Cor de identificação
-                    </FieldLabel>
-                    <Input
-                      id="admin-project-color"
-                      type="color"
-                      value={form.color}
-                      onChange={(event) =>
-                        setForm((current) => ({
-                          ...current,
-                          color: event.target.value,
-                        }))
-                      }
-                      className="w-20 p-1"
-                    />
-                  </Field>
-                  <label className="flex items-start gap-3">
-                    <Checkbox
-                      checked={form.availableToAll}
-                      onCheckedChange={(value) =>
-                        setForm((current) => ({
-                          ...current,
-                          availableToAll: Boolean(value),
-                        }))
-                      }
-                    />
-                    <span>
-                      <span className="block text-sm font-medium">
-                        Disponível para todos
-                      </span>
-                      <span className="block text-xs text-muted-foreground">
-                        Se desmarcado, só gestores lançam neste projeto.
-                      </span>
+              ) : null}
+              <>
+                <Field>
+                  <FieldLabel htmlFor="admin-project-color">
+                    Cor de identificação
+                  </FieldLabel>
+                  <Input
+                    id="admin-project-color"
+                    type="color"
+                    value={form.color}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        color: event.target.value,
+                      }))
+                    }
+                    className="w-20 p-1"
+                  />
+                </Field>
+                <label className="flex items-start gap-3">
+                  <Checkbox
+                    checked={form.availableToAll}
+                    onCheckedChange={(value) =>
+                      setForm((current) => ({
+                        ...current,
+                        availableToAll: Boolean(value),
+                      }))
+                    }
+                  />
+                  <span>
+                    <span className="block text-sm font-medium">
+                      Disponível para todos
                     </span>
-                  </label>
-                  <label className="flex items-start gap-3">
-                    <Checkbox
-                      checked={form.billableByDefault}
-                      onCheckedChange={(value) =>
-                        setForm((current) => ({
-                          ...current,
-                          billableByDefault: Boolean(value),
-                        }))
-                      }
-                    />
-                    <span className="text-sm font-medium">
-                      Faturável por padrão
+                    <span className="block text-xs text-muted-foreground">
+                      Se desmarcado, só gestores lançam neste projeto.
                     </span>
-                  </label>
-                </>
-              )}
+                  </span>
+                </label>
+                <label className="flex items-start gap-3">
+                  <Checkbox
+                    checked={form.billableByDefault}
+                    onCheckedChange={(value) =>
+                      setForm((current) => ({
+                        ...current,
+                        billableByDefault: Boolean(value),
+                      }))
+                    }
+                  />
+                  <span className="text-sm font-medium">
+                    Faturável por padrão
+                  </span>
+                </label>
+              </>
               <Field>
                 <FieldLabel>Ativo</FieldLabel>
                 <Switch
@@ -361,7 +424,16 @@ export function AdminProjectManager({
             </Button>
             <Button
               onClick={save}
-              disabled={pending || form.name.trim().length < 2}
+              disabled={
+                pending ||
+                form.name.trim().length < 2 ||
+                !/^PRO-\d+$/i.test(form.code) ||
+                (form.hourlyRate.trim().length > 0 &&
+                  (!Number.isFinite(
+                    Number(form.hourlyRate.replace(",", ".")),
+                  ) ||
+                    Number(form.hourlyRate.replace(",", ".")) < 0))
+              }
             >
               {pending ? "Salvando…" : "Salvar"}
             </Button>
@@ -378,11 +450,7 @@ export function AdminProjectManager({
       />
       <ConfirmDeleteDialog
         open={Boolean(deleting)}
-        title={
-          deleting?.kind === "cost-center"
-            ? "Excluir centro de custo"
-            : "Excluir projeto"
-        }
+        title={"Excluir projeto"}
         description={
           deleting
             ? `Excluir “${deleting.name}”? Só é possível se não houver tickets, apontamentos ou timer ativo. Com histórico, inative para preservar os registros.`

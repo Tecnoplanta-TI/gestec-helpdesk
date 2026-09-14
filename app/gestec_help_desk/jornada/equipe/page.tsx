@@ -3,6 +3,7 @@ import { addMonths, startOfMonth } from "date-fns";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
 import { monthlyGoalSeconds } from "@/lib/domain/time-goals";
+import { effectiveGoalSecondsByUser } from "@/lib/domain/effective-goals";
 import { listTeamMonthHours } from "@/lib/domain/team-time";
 import { TeamList } from "@/components/time/team-list";
 
@@ -19,8 +20,20 @@ export default async function JornadaEquipePage() {
     monthTo: startOfMonth(addMonths(now, 1)),
     userId: canSeeTeam ? undefined : session.userId,
   });
+  const fallbackGoalSeconds = monthlyGoalSeconds(now);
+  const goalSecondsByUser = await effectiveGoalSecondsByUser(
+    members.map((member) => member.userId),
+    now,
+    fallbackGoalSeconds,
+  );
 
   return (
-    <TeamList members={members} monthlyGoalSeconds={monthlyGoalSeconds(now)} />
+    <TeamList
+      members={members.map((member) => ({
+        ...member,
+        goalSeconds:
+          goalSecondsByUser.get(member.userId) ?? fallbackGoalSeconds,
+      }))}
+    />
   );
 }

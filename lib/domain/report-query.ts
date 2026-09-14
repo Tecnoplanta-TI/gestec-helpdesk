@@ -32,7 +32,30 @@ export function reportFilters(searchParams: URLSearchParams, now = new Date()) {
 
   const projectValue = searchParams.get("project")?.trim() ?? "";
   const project = PROJECT_ID.exec(projectValue);
+  if (projectValue && !project) {
+    throw new ApiError(
+      422,
+      "INVALID_PROJECT",
+      "O projeto ou centro de custo informado não é válido.",
+    );
+  }
   const projectKind = project?.[1]?.toLowerCase();
+  const explicitCostCenter = searchParams.get("costCenter")?.trim() ?? "";
+  const explicitManualProject = searchParams.get("manualProject")?.trim() ?? "";
+  if (explicitCostCenter && !UUID.test(explicitCostCenter)) {
+    throw new ApiError(
+      422,
+      "INVALID_COST_CENTER",
+      "O centro de custo informado não é válido.",
+    );
+  }
+  if (explicitManualProject && !UUID.test(explicitManualProject)) {
+    throw new ApiError(
+      422,
+      "INVALID_PROJECT",
+      "O projeto informado não é válido.",
+    );
+  }
   const billableValue = searchParams.get("billable");
   const ticket = searchParams.get("ticket")?.trim();
   const ticketNumber = ticket ? Number(ticket.replace("#", "")) : NaN;
@@ -49,8 +72,12 @@ export function reportFilters(searchParams: URLSearchParams, now = new Date()) {
   const where: Prisma.TimeEntryWhereInput = {
     status: { not: TimeEntryStatus.VOIDED },
     startedAt: { gte: from, lte: to },
-    ...(projectKind === "cost-center" ? { costCenterId: project?.[2] } : {}),
-    ...(projectKind === "manual" ? { manualProjectId: project?.[2] } : {}),
+    ...(explicitCostCenter || projectKind === "cost-center"
+      ? { costCenterId: explicitCostCenter || project?.[2] }
+      : {}),
+    ...(explicitManualProject || projectKind === "manual"
+      ? { manualProjectId: explicitManualProject || project?.[2] }
+      : {}),
     ...(billableValue === "billable" ? { billable: true } : {}),
     ...(billableValue === "non-billable" ? { billable: false } : {}),
     ...(userId ? { userId } : {}),

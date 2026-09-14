@@ -6,7 +6,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePagePermission } from "@/lib/auth/page-session";
 import {
   parseTicketFilters,
   ticketSearchWhere,
@@ -20,7 +20,7 @@ export default async function AdminTicketsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  await requirePermission("admin:manage");
+  await requirePagePermission("admin:manage");
   const filters = parseTicketFilters(await searchParams);
   const where = ticketSearchWhere(filters);
   const [tickets, total, users, costCenters] = await Promise.all([
@@ -38,7 +38,7 @@ export default async function AdminTicketsPage({
         assignee: { select: { name: true } },
         costCenter: { select: { name: true } },
       },
-      orderBy: [{ openedAt: "desc" }],
+      orderBy: [{ openedAt: "asc" }],
       skip: (filters.page - 1) * filters.pageSize,
       take: filters.pageSize,
     }),

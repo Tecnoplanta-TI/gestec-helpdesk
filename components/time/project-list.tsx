@@ -35,7 +35,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { formatCurrencyFromCents, formatHoursMinutes } from "@/lib/format";
+import {
+  currentLocalDateValue,
+  formatCurrencyFromCents,
+  formatHoursMinutes,
+} from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
 import { Add01Icon, SearchIcon } from "@/lib/icons";
 
@@ -50,6 +54,7 @@ export type ProjectListItem = {
   billableByDefault: boolean;
   hourlyRateCents: number | null;
   hourlyRateEffectiveFrom: string | Date | null;
+  latestHourlyRateEffectiveFrom: string | Date | null;
   monthSeconds: number;
 };
 
@@ -67,13 +72,14 @@ export function ProjectList({
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [deleting, setDeleting] = useState<ProjectListItem | null>(null);
   const [form, setForm] = useState({
+    code: "",
     name: "",
     color: "#10b981",
     availableToAll: true,
     billableByDefault: false,
     active: true,
     hourlyRate: "",
-    hourlyRateEffectiveFrom: new Date().toISOString().slice(0, 10),
+    hourlyRateEffectiveFrom: currentLocalDateValue(),
   });
   const visibleProjects = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
@@ -88,13 +94,14 @@ export function ProjectList({
   function openEditor(project: ProjectListItem) {
     setEditing(project);
     setForm({
+      code: project.code ?? "",
       name: project.name,
       color: project.color ?? "#10b981",
       availableToAll: project.availableToAll,
       billableByDefault: project.billableByDefault,
       active: project.active,
       hourlyRate: "",
-      hourlyRateEffectiveFrom: new Date().toISOString().slice(0, 10),
+      hourlyRateEffectiveFrom: currentLocalDateValue(),
     });
   }
 
@@ -110,7 +117,10 @@ export function ProjectList({
               ...form,
               ...(form.hourlyRate.trim()
                 ? { hourlyRate: Number(form.hourlyRate.replace(",", ".")) }
-                : { hourlyRate: undefined, hourlyRateEffectiveFrom: undefined }),
+                : {
+                    hourlyRate: undefined,
+                    hourlyRateEffectiveFrom: undefined,
+                  }),
             }),
           },
         );
@@ -136,13 +146,10 @@ export function ProjectList({
     const id = deleting.id.replace("manual:", "");
     startTransition(async () => {
       try {
-        await apiRequest(
-          `/api/v1/gestec-help-desk/projects/${id}`,
-          { method: "DELETE" },
-        );
-        toast.success(
-          "Projeto excluído.",
-        );
+        await apiRequest(`/api/v1/gestec-help-desk/projects/${id}`, {
+          method: "DELETE",
+        });
+        toast.success("Projeto excluído.");
         setDeleting(null);
         router.refresh();
       } catch (error) {
@@ -216,7 +223,10 @@ export function ProjectList({
                   visibleProjects.map((project) => (
                     <TableRow key={project.id}>
                       <TableCell className="font-medium">
-                        {project.name}
+                        <span className="block text-xs text-muted-foreground">
+                          {project.code}
+                        </span>
+                        <span>{project.name}</span>
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatCurrencyFromCents(project.hourlyRateCents)}
@@ -237,10 +247,18 @@ export function ProjectList({
                       {canManage ? (
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            <Button variant="outline" size="sm" onClick={() => openEditor(project)}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => openEditor(project)}
+                            >
                               Editar
                             </Button>
-                            <Button variant="ghost" size="sm" onClick={() => setDeleting(project)}>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setDeleting(project)}
+                            >
                               Excluir
                             </Button>
                           </div>
@@ -273,15 +291,30 @@ export function ProjectList({
         <SheetContent side="right" className="sm:max-w-md">
           <SheetHeader>
             <SheetTitle>Editar projeto</SheetTitle>
-          <SheetDescription>
+            <SheetDescription>
               Altere os dados ou arquive o projeto sem apagar o histórico.
-              {editing?.hourlyRateCents !== null && editing?.hourlyRateCents !== undefined
+              {editing?.hourlyRateCents !== null &&
+              editing?.hourlyRateCents !== undefined
                 ? ` Valor-hora atual: ${formatCurrencyFromCents(editing.hourlyRateCents)}.`
                 : " Nenhum valor-hora foi informado ainda."}
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-6">
             <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="project-edit-code">Código</FieldLabel>
+                <Input
+                  id="project-edit-code"
+                  value={form.code}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      code: event.target.value.toUpperCase(),
+                    }))
+                  }
+                  placeholder="PRO-0001"
+                />
+              </Field>
               <Field>
                 <FieldLabel htmlFor="project-edit-name">Nome</FieldLabel>
                 <Input
@@ -296,23 +329,37 @@ export function ProjectList({
                 />
               </Field>
               <Field>
-                <FieldLabel htmlFor="project-edit-hourly-rate">Novo valor-hora (R$)</FieldLabel>
+                <FieldLabel htmlFor="project-edit-hourly-rate">
+                  Novo valor-hora (R$)
+                </FieldLabel>
                 <Input
                   id="project-edit-hourly-rate"
                   inputMode="decimal"
                   value={form.hourlyRate}
-                  onChange={(event) => setForm((current) => ({ ...current, hourlyRate: event.target.value }))}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      hourlyRate: event.target.value,
+                    }))
+                  }
                   placeholder="Deixe em branco para manter o valor atual"
                 />
               </Field>
               {form.hourlyRate.trim() ? (
                 <Field>
-                  <FieldLabel htmlFor="project-edit-rate-effective-from">Válido a partir de</FieldLabel>
+                  <FieldLabel htmlFor="project-edit-rate-effective-from">
+                    Válido a partir de
+                  </FieldLabel>
                   <Input
                     id="project-edit-rate-effective-from"
                     type="date"
                     value={form.hourlyRateEffectiveFrom}
-                    onChange={(event) => setForm((current) => ({ ...current, hourlyRateEffectiveFrom: event.target.value }))}
+                    onChange={(event) =>
+                      setForm((current) => ({
+                        ...current,
+                        hourlyRateEffectiveFrom: event.target.value,
+                      }))
+                    }
                   />
                 </Field>
               ) : null}
@@ -394,7 +441,11 @@ export function ProjectList({
             </Button>
             <Button
               onClick={saveProject}
-              disabled={pending || form.name.trim().length < 2}
+              disabled={
+                pending ||
+                form.name.trim().length < 2 ||
+                !/^PRO-\d+$/i.test(form.code)
+              }
             >
               {pending ? "Salvando…" : "Salvar"}
             </Button>
@@ -413,9 +464,7 @@ export function ProjectList({
       ) : null}
       <ConfirmDeleteDialog
         open={Boolean(deleting)}
-        title={
-          "Excluir projeto"
-        }
+        title={"Excluir projeto"}
         description={
           deleting
             ? `Excluir “${deleting.name}”? Só é possível se não houver apontamentos ou timer ativo. Com histórico, inative para preservar os registros.`

@@ -7,6 +7,34 @@ import { getProject } from "@/lib/domain/projects";
 import { findProjectHourlyRateCents } from "@/lib/domain/project-rates";
 import { timerStopIdempotencyKey } from "@/lib/domain/time-query";
 
+function timerMatchesStartRequest(
+  timer: {
+    userId: string;
+    description: string;
+    costCenterId: string | null;
+    manualProjectId: string | null;
+    billable: boolean;
+  },
+  input: {
+    userId: string;
+    description: string;
+    projectId: string;
+    billable: boolean;
+  },
+) {
+  const projectId = timer.costCenterId
+    ? `cost-center:${timer.costCenterId}`
+    : timer.manualProjectId
+      ? `manual:${timer.manualProjectId}`
+      : "";
+  return (
+    timer.userId === input.userId &&
+    timer.description === input.description &&
+    projectId === input.projectId &&
+    timer.billable === input.billable
+  );
+}
+
 export async function startTimer(input: {
   userId: string;
   description: string;
@@ -37,15 +65,7 @@ export async function startTimer(input: {
         where: { requestKey: input.requestKey },
       });
       if (existingByRequest) {
-        const existingProjectId = existingByRequest.costCenterId
-          ? `cost-center:${existingByRequest.costCenterId}`
-          : `manual:${existingByRequest.manualProjectId}`;
-        if (
-          existingByRequest.userId !== input.userId ||
-          existingByRequest.description !== input.description ||
-          existingProjectId !== input.projectId ||
-          existingByRequest.billable !== input.billable
-        ) {
+        if (!timerMatchesStartRequest(existingByRequest, input)) {
           throw new ApiError(
             409,
             "IDEMPOTENCY_CONFLICT",
@@ -58,6 +78,14 @@ export async function startTimer(input: {
       const active = await tx.activeTimer.findUnique({
         where: { userId: input.userId },
       });
+      if (active?.requestKey === input.requestKey) {
+        if (timerMatchesStartRequest(active, input)) return active;
+        throw new ApiError(
+          409,
+          "IDEMPOTENCY_CONFLICT",
+          "Esta chave de requisição já foi usada em outro timer.",
+        );
+      }
       if (active)
         throw new ApiError(
           409,
@@ -98,15 +126,7 @@ export async function startTimer(input: {
       where: { requestKey: input.requestKey },
     });
     if (replay) {
-      const replayProjectId = replay.costCenterId
-        ? `cost-center:${replay.costCenterId}`
-        : `manual:${replay.manualProjectId}`;
-      if (
-        replay.userId === input.userId &&
-        replay.description === input.description &&
-        replayProjectId === input.projectId &&
-        replay.billable === input.billable
-      ) {
+      if (timerMatchesStartRequest(replay, input)) {
         return replay;
       }
     }
@@ -278,7 +298,11 @@ export async function stopTimer(
         endedAt,
         durationSeconds,
         hourlyRateCentsSnapshot: timer.manualProjectId
-          ? await findProjectHourlyRateCents(tx, timer.manualProjectId, timer.startedAt)
+          ? await findProjectHourlyRateCents(
+              tx,
+              timer.manualProjectId,
+              timer.startedAt,
+            )
           : null,
         billable: timer.billable,
         projectNameSnapshot: timer.projectName,
@@ -359,7 +383,11 @@ export async function createManualTimeEntry(input: {
           durationSeconds,
           hourlyRateCentsSnapshot:
             project.kind === "MANUAL"
-              ? await findProjectHourlyRateCents(tx, project.id, input.startedAt)
+              ? await findProjectHourlyRateCents(
+                  tx,
+                  project.id,
+                  input.startedAt,
+                )
               : null,
           billable: input.billable,
           projectNameSnapshot: project.name,

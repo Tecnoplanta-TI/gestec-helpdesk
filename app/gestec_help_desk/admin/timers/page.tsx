@@ -6,13 +6,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePagePermission } from "@/lib/auth/page-session";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminTimersPage() {
-  await requirePermission("admin:manage");
+  await requirePagePermission("admin:manage");
   const timers = await prisma.activeTimer.findMany({
     include: { user: { select: { name: true, email: true } } },
     orderBy: { startedAt: "desc" },

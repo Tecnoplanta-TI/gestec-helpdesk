@@ -102,7 +102,7 @@ export function JornadaFiltersSheet({
               />
             </Field>
             <Field>
-              <FieldLabel>Projeto</FieldLabel>
+              <FieldLabel>Centro de custo ou projeto</FieldLabel>
               <ProjectCombobox
                 projects={projects}
                 recentProjectIds={recentProjectIds}

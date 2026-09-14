@@ -12,6 +12,7 @@ import {
   adminTicketUpdateSchema,
   adminTimeEntryCreateSchema,
   adminUserSchema,
+  timeGoalSchema,
   zeevTicketSchema,
 } from "@/lib/domain/schemas";
 
@@ -154,5 +155,37 @@ describe("contratos do domínio", () => {
         endedAt: "2026-09-03T11:00:00-03:00",
       }).success,
     ).toBe(true);
+  });
+
+  it("aceita metas permanentes sem data final e exige fim em metas temporárias", () => {
+    const baseGoal = {
+      title: "Meta contínua",
+      targetSeconds: 160 * 60 * 60,
+      startsOn: "2026-09-11",
+      targetUserId: "00000000-0000-4000-8000-000000000001",
+      targetGroupId: null,
+    };
+
+    expect(
+      timeGoalSchema.safeParse({
+        ...baseGoal,
+        permanent: true,
+        endsOn: null,
+      }).success,
+    ).toBe(true);
+    expect(
+      timeGoalSchema.safeParse({
+        ...baseGoal,
+        permanent: false,
+        endsOn: null,
+      }).success,
+    ).toBe(false);
+    expect(
+      timeGoalSchema.safeParse({
+        ...baseGoal,
+        permanent: true,
+        endsOn: "2026-09-30",
+      }).success,
+    ).toBe(false);
   });
 });

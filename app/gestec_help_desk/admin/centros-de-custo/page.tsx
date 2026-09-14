@@ -1,11 +1,11 @@
 import { CostCenterManager } from "@/components/settings/cost-center-manager";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePagePermission } from "@/lib/auth/page-session";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminCostCentersPage() {
-  await requirePermission("admin:manage");
+  await requirePagePermission("admin:manage");
   const costCenters = await prisma.costCenter.findMany({
     orderBy: [{ active: "desc" }, { name: "asc" }],
   });

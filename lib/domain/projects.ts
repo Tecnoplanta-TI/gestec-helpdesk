@@ -147,16 +147,16 @@ export async function listProjects(
         ? { name: { contains: search, mode: "insensitive" as const } }
         : {}),
     },
-    select: { id: true, name: true, billableByDefault: true },
+    select: { id: true, name: true, code: true, billableByDefault: true },
     orderBy: { name: "asc" },
   });
 
   return manualProjects.map((project) => ({
-      id: `manual:${project.id}`,
-      name: project.name,
-      code: null,
-      billableByDefault: project.billableByDefault,
-    }));
+    id: `manual:${project.id}`,
+    name: project.name,
+    code: project.code,
+    billableByDefault: project.billableByDefault,
+  }));
 }
 
 export async function listProjectCatalog(options?: {
@@ -166,6 +166,10 @@ export async function listProjectCatalog(options?: {
   monthTo?: Date;
 }) {
   const activeWhere = options?.includeInactive ? {} : { active: true };
+  const now = new Date();
+  const today = new Date(
+    Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()),
+  );
   const [manualProjects, monthEntries] = await Promise.all([
     prisma.manualProject.findMany({
       where: {
@@ -174,13 +178,13 @@ export async function listProjectCatalog(options?: {
       },
       select: {
         id: true,
+        code: true,
         name: true,
         color: true,
         availableToAll: true,
         active: true,
         billableByDefault: true,
         hourlyRates: {
-          take: 1,
           orderBy: { effectiveFrom: "desc" },
           select: { amountCents: true, effectiveFrom: true },
         },
@@ -209,20 +213,27 @@ export async function listProjectCatalog(options?: {
     if (id) monthSeconds.set(id, row._sum.durationSeconds ?? 0);
   }
 
-  return manualProjects.map((project) => {
+  return manualProjects
+    .map((project) => {
       const id = `manual:${project.id}`;
+      const currentRate = project.hourlyRates.find(
+        (rate) => rate.effectiveFrom <= today,
+      );
+      const latestRate = project.hourlyRates[0];
       return {
         id,
         kind: "manual" as const,
         name: project.name,
-        code: null as string | null,
+        code: project.code,
         color: project.color,
         availableToAll: project.availableToAll,
         active: project.active,
         billableByDefault: project.billableByDefault,
-        hourlyRateCents: project.hourlyRates[0]?.amountCents ?? null,
-        hourlyRateEffectiveFrom: project.hourlyRates[0]?.effectiveFrom ?? null,
+        hourlyRateCents: currentRate?.amountCents ?? null,
+        hourlyRateEffectiveFrom: currentRate?.effectiveFrom ?? null,
+        latestHourlyRateEffectiveFrom: latestRate?.effectiveFrom ?? null,
         monthSeconds: monthSeconds.get(id) ?? 0,
       };
-    }).sort((left, right) => right.monthSeconds - left.monthSeconds);
+    })
+    .sort((left, right) => right.monthSeconds - left.monthSeconds);
 }

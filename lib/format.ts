@@ -5,6 +5,27 @@ export function formatDateTime(value: Date | string) {
   }).format(new Date(value));
 }
 
+export function currentLocalDateValue(date = new Date()) {
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+export function formatDateOnly(value: Date | string) {
+  const datePart =
+    typeof value === "string" ? value.match(/^(\d{4})-(\d{2})-(\d{2})/) : null;
+  const date = datePart
+    ? new Date(
+        Number(datePart[1]),
+        Number(datePart[2]) - 1,
+        Number(datePart[3]),
+      )
+    : new Date(value);
+  if (Number.isNaN(date.getTime())) return "Data inválida";
+  return new Intl.DateTimeFormat("pt-BR", {
+    dateStyle: "short",
+  }).format(date);
+}
+
 export function formatDuration(totalSeconds: number) {
   const seconds = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(seconds / 3600);

@@ -83,6 +83,7 @@ enum SyncDirection {
 
 enum SyncStatus {
   PENDING
+  PROCESSING
   SUCCEEDED
   FAILED
 }
@@ -162,6 +163,7 @@ model Service {
 
 model ManualProject {
   id                String   @id @default(uuid()) @db.Uuid
+  code              String   @unique
   name              String
   normalizedName    String   @unique
   color             String
@@ -224,19 +226,20 @@ model UserGroupMember {
 }
 
 model TimeGoal {
-  id              String   @id @default(uuid()) @db.Uuid
+  id              String    @id @default(uuid()) @db.Uuid
   title           String
   targetSeconds   Int
-  startsOn        DateTime @db.Date
-  endsOn          DateTime @db.Date
-  active          Boolean  @default(true)
-  targetUserId    String?  @db.Uuid
-  targetGroupId   String?  @db.Uuid
-  manualProjectId String?  @db.Uuid
-  costCenterId    String?  @db.Uuid
-  createdById     String   @db.Uuid
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  startsOn        DateTime  @db.Date
+  endsOn          DateTime? @db.Date
+  permanent       Boolean   @default(false)
+  active          Boolean   @default(true)
+  targetUserId    String?   @db.Uuid
+  targetGroupId   String?   @db.Uuid
+  manualProjectId String?   @db.Uuid
+  costCenterId    String?   @db.Uuid
+  createdById     String    @db.Uuid
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
   targetUser  UserRef?       @relation("TimeGoalUser", fields: [targetUserId], references: [id], onDelete: Cascade)
   targetGroup UserGroup?     @relation(fields: [targetGroupId], references: [id], onDelete: Cascade)
@@ -521,22 +524,24 @@ model TicketEvaluation {
 }
 
 model SyncExecution {
-  id             String        @id @default(uuid()) @db.Uuid
-  ticketId       String?       @db.Uuid
-  idempotencyKey String        @unique
-  event          String
-  direction      SyncDirection
-  status         SyncStatus    @default(PENDING)
-  payload        Json
-  response       Json?
-  attempts       Int           @default(0)
-  lastError      String?
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @updatedAt
+  id                  String        @id @default(uuid()) @db.Uuid
+  ticketId            String?       @db.Uuid
+  idempotencyKey      String        @unique
+  event               String
+  direction           SyncDirection
+  status              SyncStatus    @default(PENDING)
+  payload             Json
+  response            Json?
+  attempts            Int           @default(0)
+  lastError           String?
+  processingStartedAt DateTime?
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
 
   ticket Ticket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
 
   @@index([status, createdAt])
+  @@index([status, processingStartedAt])
 }
 
 model AuditEvent {

@@ -1106,6 +1106,13 @@ export async function retryTicketZeevSync(input: {
         "Esta etapa já foi sincronizada com o Zeev.",
       );
     }
+    if (existing.status === SyncStatus.PROCESSING) {
+      throw new ApiError(
+        409,
+        "SYNC_ALREADY_PROCESSING",
+        "Esta etapa já está sendo sincronizada com o Zeev.",
+      );
+    }
     return tx.syncExecution.update({
       where: { id: existing.id },
       data: { status: SyncStatus.PENDING, attempts: 0, lastError: null },
@@ -1121,10 +1128,31 @@ export async function retryTicketZeevSync(input: {
 }
 
 export async function dispatchPendingZeevSync(idempotencyKey: string) {
+  const processingStartedAt = new Date();
+  const staleBefore = new Date(processingStartedAt.getTime() - 120_000);
+  const claimed = await prisma.syncExecution.updateMany({
+    where: {
+      idempotencyKey,
+      direction: SyncDirection.OUTBOUND,
+      OR: [
+        { status: SyncStatus.PENDING },
+        { status: SyncStatus.FAILED },
+        {
+          status: SyncStatus.PROCESSING,
+          processingStartedAt: { lt: staleBefore },
+        },
+      ],
+    },
+    data: { status: SyncStatus.PROCESSING, processingStartedAt },
+  });
+  if (claimed.count === 0) {
+    return prisma.syncExecution.findUnique({ where: { idempotencyKey } });
+  }
+
   const execution = await prisma.syncExecution.findUnique({
     where: { idempotencyKey },
   });
-  if (!execution || execution.status === SyncStatus.SUCCEEDED) return execution;
+  if (!execution) return execution;
 
   try {
     if (isRealZeevApiEnabled()) {
@@ -1136,6 +1164,7 @@ export async function dispatchPendingZeevSync(idempotencyKey: string) {
       data: {
         status: SyncStatus.FAILED,
         attempts: { increment: 1 },
+        processingStartedAt: null,
         lastError:
           error instanceof Error ? error.message : "Falha desconhecida",
       },
@@ -1149,6 +1178,7 @@ export async function dispatchPendingZeevSync(idempotencyKey: string) {
       data: {
         status: SyncStatus.FAILED,
         attempts: { increment: 1 },
+        processingStartedAt: null,
         lastError: "ZEEV_CALLBACK_URL não configurada",
       },
     });
@@ -1178,6 +1208,7 @@ export async function dispatchPendingZeevSync(idempotencyKey: string) {
       data: {
         status: SyncStatus.SUCCEEDED,
         attempts: { increment: 1 },
+        processingStartedAt: null,
         response: responseBody as Prisma.InputJsonValue,
         lastError: null,
       },
@@ -1188,6 +1219,7 @@ export async function dispatchPendingZeevSync(idempotencyKey: string) {
       data: {
         status: SyncStatus.FAILED,
         attempts: { increment: 1 },
+        processingStartedAt: null,
         lastError:
           error instanceof Error ? error.message : "Falha desconhecida",
       },

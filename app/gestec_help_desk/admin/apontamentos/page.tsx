@@ -10,7 +10,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePagePermission } from "@/lib/auth/page-session";
 import { listProjectCatalog } from "@/lib/domain/projects";
 import { prisma } from "@/lib/prisma";
 
@@ -21,7 +21,7 @@ export default async function AdminTimeEntriesPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const session = await requirePermission("admin:manage");
+  const session = await requirePagePermission("admin:manage");
   const params = await searchParams;
   const today = format(new Date(), "yyyy-MM-dd");
   const fromValue =

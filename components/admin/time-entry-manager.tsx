@@ -210,7 +210,7 @@ export function AdminTimeEntryManager({
               <TableHead>Quando</TableHead>
               <TableHead>Pessoa</TableHead>
               <TableHead>Descrição</TableHead>
-              <TableHead>Projeto</TableHead>
+              <TableHead>Centro de custo / projeto</TableHead>
               <TableHead>Duração</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-right">Ações</TableHead>
@@ -333,7 +333,7 @@ export function AdminTimeEntryManager({
               />
             </Field>
             <Field>
-              <FieldLabel>Projeto</FieldLabel>
+              <FieldLabel>Centro de custo ou projeto</FieldLabel>
               <Select
                 value={form.projectId}
                 onValueChange={(value) =>

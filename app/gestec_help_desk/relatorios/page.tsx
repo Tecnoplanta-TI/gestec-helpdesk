@@ -56,13 +56,16 @@ export default async function ReportsPage({
     typeof params.to === "string"
       ? params.to
       : format(databaseNow, "yyyy-MM-dd");
-  const projectValue = scalar(params.project);
+  const projectValue = scalar(params.manualProject);
+  const costCenterValue = scalar(params.costCenter);
   const billableValue = scalar(params.billable);
   const ticketValue = scalar(params.ticket);
   const userValue = scalar(params.userId);
   const reportParams = new URLSearchParams({ from: fromValue, to: toValue });
   if (projectValue && projectValue !== "all")
-    reportParams.set("project", projectValue);
+    reportParams.set("manualProject", projectValue);
+  if (costCenterValue && costCenterValue !== "all")
+    reportParams.set("costCenter", costCenterValue);
   if (billableValue && billableValue !== "all")
     reportParams.set("billable", billableValue);
   if (ticketValue) reportParams.set("ticket", ticketValue);
@@ -78,6 +81,7 @@ export default async function ReportsPage({
     hoursByProject,
     evaluations,
     projects,
+    costCenters,
     users,
   ] = await Promise.all([
     prisma.ticket.groupBy({
@@ -91,7 +95,7 @@ export default async function ReportsPage({
       _sum: { durationSeconds: true },
     }),
     prisma.timeEntry.groupBy({
-      by: ["projectNameSnapshot"],
+      by: ["projectNameSnapshot", "costCenterId", "manualProjectId"],
       where: timeWhere,
       _sum: { durationSeconds: true },
     }),
@@ -102,6 +106,11 @@ export default async function ReportsPage({
     }),
     listProjectCatalog({
       includePrivateManual: hasPermission(session.role, "time:manage"),
+    }),
+    prisma.costCenter.findMany({
+      where: { active: true },
+      select: { id: true, code: true, name: true },
+      orderBy: [{ code: "asc" }, { name: "asc" }],
     }),
     prisma.userRef.findMany({
       where: { active: true },
@@ -115,14 +124,18 @@ export default async function ReportsPage({
   );
   const billableSeconds =
     hoursByBillable.find((row) => row.billable)?._sum.durationSeconds ?? 0;
-  const projectTotals = Object.entries(
-    hoursByProject.reduce<Record<string, number>>((accumulator, row) => {
-      const key = row.projectNameSnapshot ?? "Pendente de classificação";
-      accumulator[key] =
-        (accumulator[key] ?? 0) + (row._sum.durationSeconds ?? 0);
-      return accumulator;
-    }, {}),
-  ).sort((left, right) => right[1] - left[1]);
+  const projectTotals = hoursByProject
+    .map((row) => ({
+      key: `${row.costCenterId ?? ""}:${row.manualProjectId ?? ""}:${row.projectNameSnapshot ?? ""}`,
+      name: row.projectNameSnapshot ?? "Pendente de classificação",
+      type: row.costCenterId
+        ? "Centro de custo"
+        : row.manualProjectId
+          ? "Projeto Semear"
+          : "Sem classificação",
+      seconds: row._sum.durationSeconds ?? 0,
+    }))
+    .sort((left, right) => right.seconds - left.seconds);
 
   return (
     <div className="flex flex-col gap-6">
@@ -148,7 +161,7 @@ export default async function ReportsPage({
       </div>
       <Card>
         <CardContent className="pt-6">
-          <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
             <label className="flex flex-col gap-1.5 text-sm font-medium">
               De
               <Input type="date" name="from" defaultValue={fromValue} />
@@ -158,24 +171,52 @@ export default async function ReportsPage({
               <Input type="date" name="to" defaultValue={toValue} />
             </label>
             <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Projeto
+              Centro de custo
               <Select
-                name="project"
-                defaultValue={projectValue || "all"}
+                name="costCenter"
+                defaultValue={costCenterValue || "all"}
                 items={Object.fromEntries([
-                  ["all", "Todos os projetos"],
-                  ...projects.map((project) => [project.id, project.name]),
+                  ["all", "Todos"],
+                  ...costCenters.map((costCenter) => [
+                    costCenter.id,
+                    `${costCenter.code} · ${costCenter.name}`,
+                  ]),
                 ])}
               >
                 <SelectTrigger className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os projetos</SelectItem>
+                  <SelectItem value="all">Todos</SelectItem>
+                  {costCenters.map((costCenter) => (
+                    <SelectItem key={costCenter.id} value={costCenter.id}>
+                      {costCenter.code} · {costCenter.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="flex flex-col gap-1.5 text-sm font-medium">
+              Projeto Semear
+              <Select
+                name="manualProject"
+                defaultValue={projectValue || "all"}
+                items={Object.fromEntries([
+                  ["all", "Todos"],
+                  ...projects.map((project) => [
+                    project.id.slice(7),
+                    project.name,
+                  ]),
+                ])}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos</SelectItem>
                   {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                      {project.code ? ` · ${project.code}` : ""}
+                    <SelectItem key={project.id} value={project.id.slice(7)}>
+                      {project.code} · {project.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -238,9 +279,9 @@ export default async function ReportsPage({
             </Button>
           </form>
           <p className="mt-3 text-xs text-muted-foreground">
-            Projeto, faturabilidade, usuário e ticket ou descrição refinam os
-            apontamentos, os totais de horas e a exportação. Indicadores de
-            tickets consideram o período informado.
+            Centro de custo, Projeto Semear, faturabilidade, usuário e ticket ou
+            descrição refinam os apontamentos, os totais de horas e a
+            exportação. Indicadores de tickets consideram o período informado.
           </p>
         </CardContent>
       </Card>
@@ -311,7 +352,7 @@ export default async function ReportsPage({
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Horas por projeto</CardTitle>
+            <CardTitle>Horas por centro de custo e projeto</CardTitle>
             <CardDescription>
               Base quantitativa para gestão e cobrança; valores monetários não
               foram definidos.
@@ -321,24 +362,28 @@ export default async function ReportsPage({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Projeto</TableHead>
+                  <TableHead>Classificação</TableHead>
+                  <TableHead>Tipo</TableHead>
                   <TableHead className="text-right">Duração</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {projectTotals.length ? (
-                  projectTotals.map(([project, seconds]) => (
-                    <TableRow key={project}>
-                      <TableCell>{project}</TableCell>
+                  projectTotals.map((item) => (
+                    <TableRow key={item.key}>
+                      <TableCell>{item.name}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {item.type}
+                      </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
-                        {formatDuration(seconds)}
+                        {formatDuration(item.seconds)}
                       </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={2}
+                      colSpan={3}
                       className="h-24 text-center text-muted-foreground"
                     >
                       Sem apontamentos no período.

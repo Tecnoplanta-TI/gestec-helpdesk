@@ -21,6 +21,7 @@ import { Switch } from "@/components/ui/switch";
 import { Add01Icon } from "@/lib/icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { apiRequest } from "@/lib/http/client";
+import { currentLocalDateValue } from "@/lib/format";
 import type { TimeProject } from "@/components/time/project-combobox";
 
 export function CreateProjectDialog({
@@ -38,16 +39,18 @@ export function CreateProjectDialog({
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
   const [color, setColor] = useState("#10b981");
   const [availableToAll, setAvailableToAll] = useState(true);
   const [billableByDefault, setBillableByDefault] = useState(false);
   const [active, setActive] = useState(true);
   const [hourlyRate, setHourlyRate] = useState("");
-  const [hourlyRateEffectiveFrom, setHourlyRateEffectiveFrom] = useState(
-    () => new Date().toISOString().slice(0, 10),
+  const [hourlyRateEffectiveFrom, setHourlyRateEffectiveFrom] = useState(() =>
+    currentLocalDateValue(),
   );
   const dirty =
     name.trim().length > 0 ||
+    code.trim().length > 0 ||
     color !== "#10b981" ||
     !availableToAll ||
     billableByDefault ||
@@ -55,12 +58,13 @@ export function CreateProjectDialog({
 
   function reset() {
     setName("");
+    setCode("");
     setColor("#10b981");
     setAvailableToAll(true);
     setBillableByDefault(false);
     setActive(true);
     setHourlyRate("");
-    setHourlyRateEffectiveFrom(new Date().toISOString().slice(0, 10));
+    setHourlyRateEffectiveFrom(currentLocalDateValue());
   }
 
   function handleOpenChange(next: boolean) {
@@ -83,6 +87,7 @@ export function CreateProjectDialog({
             method: "POST",
             body: JSON.stringify({
               name,
+              code: code.toUpperCase(),
               color,
               availableToAll,
               billableByDefault,
@@ -100,7 +105,7 @@ export function CreateProjectDialog({
         onCreated({
           id: project.id,
           name: project.name,
-          code: null,
+          code: project.code,
           billableByDefault: project.billableByDefault,
         });
         reset();
@@ -130,11 +135,21 @@ export function CreateProjectDialog({
         <DialogHeader>
           <DialogTitle>Criar projeto</DialogTitle>
           <DialogDescription>
-            Cadastre um projeto do programa Semear. Clientes são mantidos em
-            um cadastro separado.
+            Cadastre um projeto do programa Semear. Clientes são mantidos em um
+            cadastro separado.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="project-code">Código do projeto</FieldLabel>
+            <Input
+              id="project-code"
+              value={code}
+              onChange={(event) => setCode(event.target.value.toUpperCase())}
+              placeholder="PRO-0001"
+              aria-invalid={code.length > 0 && !/^PRO-\d+$/i.test(code)}
+            />
+          </Field>
           <Field>
             <FieldLabel htmlFor="project-name">Nome do projeto</FieldLabel>
             <Input
@@ -146,7 +161,9 @@ export function CreateProjectDialog({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="project-hourly-rate">Valor-hora (R$)</FieldLabel>
+            <FieldLabel htmlFor="project-hourly-rate">
+              Valor-hora (R$)
+            </FieldLabel>
             <Input
               id="project-hourly-rate"
               inputMode="decimal"
@@ -157,12 +174,16 @@ export function CreateProjectDialog({
           </Field>
           {hourlyRate.trim() ? (
             <Field>
-              <FieldLabel htmlFor="project-rate-effective-from">Válido a partir de</FieldLabel>
+              <FieldLabel htmlFor="project-rate-effective-from">
+                Válido a partir de
+              </FieldLabel>
               <Input
                 id="project-rate-effective-from"
                 type="date"
                 value={hourlyRateEffectiveFrom}
-                onChange={(event) => setHourlyRateEffectiveFrom(event.target.value)}
+                onChange={(event) =>
+                  setHourlyRateEffectiveFrom(event.target.value)
+                }
               />
             </Field>
           ) : null}
@@ -224,7 +245,9 @@ export function CreateProjectDialog({
             Cancelar
           </DialogClose>
           <Button
-            disabled={pending || name.trim().length < 2}
+            disabled={
+              pending || name.trim().length < 2 || !/^PRO-\d+$/i.test(code)
+            }
             onClick={createProject}
           >
             {pending ? "Criando…" : "Criar projeto"}

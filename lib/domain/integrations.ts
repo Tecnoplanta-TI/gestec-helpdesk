@@ -24,6 +24,103 @@ type ZeevTicketInput = z.infer<typeof zeevTicketSchema>;
 type EvaluationInput = z.infer<typeof evaluationSchema>;
 type ZeevStageReadyInput = z.infer<typeof zeevStageReadySchema>;
 
+function isUniqueConstraintViolation(error: unknown) {
+  return (
+    error instanceof Prisma.PrismaClientKnownRequestError &&
+    error.code === "P2002"
+  );
+}
+
+async function replayTicketAfterConcurrentDelivery(input: ZeevTicketInput) {
+  const execution = await prisma.syncExecution.findUnique({
+    where: { idempotencyKey: input.idempotencyKey },
+  });
+  if (!execution?.ticketId) return null;
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: execution.ticketId },
+    include: { costCenter: true, assignee: true },
+  });
+  if (!ticket) {
+    throw new ApiError(
+      409,
+      "INCONSISTENT_REPLAY",
+      "Evento repetido sem ticket correspondente.",
+    );
+  }
+  if (ticket.externalReference !== input.ticket.externalReference) {
+    throw new ApiError(
+      409,
+      "IDEMPOTENCY_KEY_REUSED",
+      "A chave de idempotência já foi usada por outro ticket.",
+    );
+  }
+  return { ticket, replay: true };
+}
+
+async function replayEvaluationAfterConcurrentDelivery(input: EvaluationInput) {
+  const execution = await prisma.syncExecution.findUnique({
+    where: { idempotencyKey: `zeev:eval:${input.externalId}` },
+  });
+  if (!execution?.ticketId) return null;
+
+  const [ticket, evaluation] = await Promise.all([
+    prisma.ticket.findUnique({ where: { id: execution.ticketId } }),
+    prisma.ticketEvaluation.findUnique({
+      where: { externalId: input.externalId },
+    }),
+  ]);
+  if (!ticket || !evaluation) {
+    throw new ApiError(
+      409,
+      "INCONSISTENT_REPLAY",
+      "Avaliação repetida sem resultado correspondente.",
+    );
+  }
+  if (ticket.externalReference !== input.externalReference) {
+    throw new ApiError(
+      409,
+      "IDEMPOTENCY_KEY_REUSED",
+      "O identificador da avaliação já foi usado em outro ticket.",
+    );
+  }
+  return {
+    ticket,
+    evaluation,
+    routedToAssigneeId:
+      ticket.status === TicketStatus.REOPENED_LOW_SCORE
+        ? ticket.assigneeId
+        : null,
+    replay: true,
+  };
+}
+
+async function replayStageAfterConcurrentDelivery(input: ZeevStageReadyInput) {
+  const execution = await prisma.syncExecution.findUnique({
+    where: { idempotencyKey: input.idempotencyKey },
+  });
+  if (!execution?.ticketId) return null;
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: execution.ticketId },
+  });
+  if (!ticket) {
+    throw new ApiError(
+      409,
+      "INCONSISTENT_REPLAY",
+      "Evento de etapa repetido sem ticket correspondente.",
+    );
+  }
+  if (ticket.externalReference !== input.ticket.externalReference) {
+    throw new ApiError(
+      409,
+      "IDEMPOTENCY_KEY_REUSED",
+      "A chave de idempotência já foi usada por outro ticket.",
+    );
+  }
+  return { ticket, replay: true };
+}
+
 export function assertBearerToken(
   request: Request,
   expected: string | undefined,
@@ -44,318 +141,345 @@ export function assertBearerToken(
 }
 
 export async function receiveZeevTicket(input: ZeevTicketInput) {
-  return prisma.$transaction(async (tx) => {
-    const previousExecution = await tx.syncExecution.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
-    });
-    if (previousExecution) {
-      const existing = previousExecution.ticketId
-        ? await tx.ticket.findUnique({
-            where: { id: previousExecution.ticketId },
-            include: { costCenter: true, assignee: true },
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const previousExecution = await tx.syncExecution.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (previousExecution) {
+        const existing = previousExecution.ticketId
+          ? await tx.ticket.findUnique({
+              where: { id: previousExecution.ticketId },
+              include: { costCenter: true, assignee: true },
+            })
+          : null;
+        if (!existing)
+          throw new ApiError(
+            409,
+            "INCONSISTENT_REPLAY",
+            "Evento repetido sem ticket correspondente.",
+          );
+        if (existing.externalReference !== input.ticket.externalReference) {
+          throw new ApiError(
+            409,
+            "IDEMPOTENCY_KEY_REUSED",
+            "A chave de idempotência já foi usada por outro ticket.",
+          );
+        }
+        return { ticket: existing, replay: true };
+      }
+
+      const costCenterValue = input.ticket.costCenter?.sourceValue?.trim();
+      const costCenter = costCenterValue
+        ? await tx.costCenter.findFirst({
+            where: {
+              OR: [
+                { code: { equals: costCenterValue, mode: "insensitive" } },
+                { name: { equals: costCenterValue, mode: "insensitive" } },
+              ],
+            },
           })
         : null;
-      if (!existing)
-        throw new ApiError(
-          409,
-          "INCONSISTENT_REPLAY",
-          "Evento repetido sem ticket correspondente.",
-        );
-      if (existing.externalReference !== input.ticket.externalReference) {
-        throw new ApiError(
-          409,
-          "IDEMPOTENCY_KEY_REUSED",
-          "A chave de idempotência já foi usada por outro ticket.",
-        );
-      }
-      return { ticket: existing, replay: true };
-    }
 
-    const costCenterValue = input.ticket.costCenter?.sourceValue?.trim();
-    const costCenter = costCenterValue
-      ? await tx.costCenter.findFirst({
-          where: {
-            OR: [
-              { code: { equals: costCenterValue, mode: "insensitive" } },
-              { name: { equals: costCenterValue, mode: "insensitive" } },
-            ],
-          },
-        })
-      : null;
-
-    const ticket = await tx.ticket.upsert({
-      where: { externalReference: input.ticket.externalReference },
-      create: {
-        externalReference: input.ticket.externalReference,
-        externalInstanceId: String(input.source.instanceId),
-        externalInstanceUrl: input.source.instanceUrl || null,
-        zeevTaskCode:
-          input.source.taskCode || process.env.ZEEV_WAIT_TASK_CODE || null,
-        zeevAssignmentId: input.source.assignmentId || null,
-        title: input.ticket.summary,
-        description: input.ticket.supportNotes || input.ticket.summary,
-        requestType: normalizeRequestType(input.ticket.requestType),
-        service: input.ticket.service || null,
-        serviceGroup: input.ticket.serviceGroup || null,
-        applicationOrProcess: input.ticket.applicationOrProcess || null,
-        assetCode: input.ticket.assetCode || null,
-        priority: normalizePriority(input.ticket.priority),
-        requesterName: input.requester.name,
-        requesterExternalId: input.requester.name,
-        openedAt: input.requester.openedAt,
-        costCenterId: costCenter?.id,
-        firstContactDeadline: parseOptionalDate(
-          input.assignment?.initialContactDeadline,
-        ),
-        serviceDeadline: parseOptionalDate(input.assignment?.serviceDeadline),
-        status: TicketStatus.TRIAGE,
-      },
-      update: {
-        externalInstanceId: String(input.source.instanceId),
-        externalInstanceUrl: input.source.instanceUrl || null,
-        zeevTaskCode:
-          input.source.taskCode || process.env.ZEEV_WAIT_TASK_CODE || null,
-        zeevAssignmentId: input.source.assignmentId || null,
-        title: input.ticket.summary,
-        description: input.ticket.supportNotes || input.ticket.summary,
-        requestType: normalizeRequestType(input.ticket.requestType),
-        service: input.ticket.service || null,
-        serviceGroup: input.ticket.serviceGroup || null,
-        applicationOrProcess: input.ticket.applicationOrProcess || null,
-        assetCode: input.ticket.assetCode || null,
-        priority: normalizePriority(input.ticket.priority),
-        requesterName: input.requester.name,
-        costCenterId: costCenter?.id,
-        firstContactDeadline: parseOptionalDate(
-          input.assignment?.initialContactDeadline,
-        ),
-        serviceDeadline: parseOptionalDate(input.assignment?.serviceDeadline),
-        version: { increment: 1 },
-      },
-      include: { costCenter: true, assignee: true },
-    });
-
-    await tx.ticketHistory.create({
-      data: {
-        ticketId: ticket.id,
-        action: "RECEIVED_FROM_ZEEV",
-        toStatus: ticket.status,
-        details: {
-          processName: input.source.processName,
-          instanceId: input.source.instanceId,
-          costCenterSourceValue: costCenterValue ?? null,
-          costCenterMatched: Boolean(costCenter),
+      const ticket = await tx.ticket.upsert({
+        where: { externalReference: input.ticket.externalReference },
+        create: {
+          externalReference: input.ticket.externalReference,
+          externalInstanceId: String(input.source.instanceId),
+          externalInstanceUrl: input.source.instanceUrl || null,
+          zeevTaskCode:
+            input.source.taskCode || process.env.ZEEV_WAIT_TASK_CODE || null,
+          zeevAssignmentId: input.source.assignmentId || null,
+          title: input.ticket.summary,
+          description: input.ticket.supportNotes || input.ticket.summary,
+          requestType: normalizeRequestType(input.ticket.requestType),
+          service: input.ticket.service || null,
+          serviceGroup: input.ticket.serviceGroup || null,
+          applicationOrProcess: input.ticket.applicationOrProcess || null,
+          assetCode: input.ticket.assetCode || null,
+          priority: normalizePriority(input.ticket.priority),
+          requesterName: input.requester.name,
+          requesterExternalId: input.requester.name,
+          openedAt: input.requester.openedAt,
+          costCenterId: costCenter?.id,
+          firstContactDeadline: parseOptionalDate(
+            input.assignment?.initialContactDeadline,
+          ),
+          serviceDeadline: parseOptionalDate(input.assignment?.serviceDeadline),
+          status: TicketStatus.TRIAGE,
         },
-      },
+        update: {
+          externalInstanceId: String(input.source.instanceId),
+          externalInstanceUrl: input.source.instanceUrl || null,
+          zeevTaskCode:
+            input.source.taskCode || process.env.ZEEV_WAIT_TASK_CODE || null,
+          zeevAssignmentId: input.source.assignmentId || null,
+          title: input.ticket.summary,
+          description: input.ticket.supportNotes || input.ticket.summary,
+          requestType: normalizeRequestType(input.ticket.requestType),
+          service: input.ticket.service || null,
+          serviceGroup: input.ticket.serviceGroup || null,
+          applicationOrProcess: input.ticket.applicationOrProcess || null,
+          assetCode: input.ticket.assetCode || null,
+          priority: normalizePriority(input.ticket.priority),
+          requesterName: input.requester.name,
+          costCenterId: costCenter?.id,
+          firstContactDeadline: parseOptionalDate(
+            input.assignment?.initialContactDeadline,
+          ),
+          serviceDeadline: parseOptionalDate(input.assignment?.serviceDeadline),
+          version: { increment: 1 },
+        },
+        include: { costCenter: true, assignee: true },
+      });
+
+      await tx.ticketHistory.create({
+        data: {
+          ticketId: ticket.id,
+          action: "RECEIVED_FROM_ZEEV",
+          toStatus: ticket.status,
+          details: {
+            processName: input.source.processName,
+            instanceId: input.source.instanceId,
+            costCenterSourceValue: costCenterValue ?? null,
+            costCenterMatched: Boolean(costCenter),
+          },
+        },
+      });
+      await tx.syncExecution.create({
+        data: {
+          ticketId: ticket.id,
+          idempotencyKey: input.idempotencyKey,
+          event: input.event,
+          direction: SyncDirection.INBOUND,
+          status: SyncStatus.SUCCEEDED,
+          payload: input as unknown as Prisma.InputJsonValue,
+          response: { ticketId: ticket.id, number: ticket.number },
+          attempts: 1,
+        },
+      });
+      return { ticket, replay: false };
     });
-    await tx.syncExecution.create({
-      data: {
-        ticketId: ticket.id,
-        idempotencyKey: input.idempotencyKey,
-        event: input.event,
-        direction: SyncDirection.INBOUND,
-        status: SyncStatus.SUCCEEDED,
-        payload: input as unknown as Prisma.InputJsonValue,
-        response: { ticketId: ticket.id, number: ticket.number },
-        attempts: 1,
-      },
-    });
-    return { ticket, replay: false };
-  });
+  } catch (error) {
+    if (isUniqueConstraintViolation(error)) {
+      const replay = await replayTicketAfterConcurrentDelivery(input);
+      if (replay) return replay;
+    }
+    throw error;
+  }
 }
 
 export async function receiveZeevEvaluation(input: EvaluationInput) {
-  return prisma.$transaction(async (tx) => {
-    const idempotencyKey = `zeev:eval:${input.externalId}`;
-    const previousSync = await tx.syncExecution.findUnique({
-      where: { idempotencyKey },
-    });
-    if (previousSync?.ticketId) {
-      const [ticket, evaluation] = await Promise.all([
-        tx.ticket.findUnique({ where: { id: previousSync.ticketId } }),
-        tx.ticketEvaluation.findUnique({
-          where: { externalId: input.externalId },
-        }),
-      ]);
-      if (!ticket || !evaluation) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const idempotencyKey = `zeev:eval:${input.externalId}`;
+      const previousSync = await tx.syncExecution.findUnique({
+        where: { idempotencyKey },
+      });
+      if (previousSync?.ticketId) {
+        const [ticket, evaluation] = await Promise.all([
+          tx.ticket.findUnique({ where: { id: previousSync.ticketId } }),
+          tx.ticketEvaluation.findUnique({
+            where: { externalId: input.externalId },
+          }),
+        ]);
+        if (!ticket || !evaluation) {
+          throw new ApiError(
+            409,
+            "INCONSISTENT_REPLAY",
+            "Avaliação repetida sem resultado correspondente.",
+          );
+        }
+        if (ticket.externalReference !== input.externalReference) {
+          throw new ApiError(
+            409,
+            "IDEMPOTENCY_KEY_REUSED",
+            "O identificador da avaliação já foi usado em outro ticket.",
+          );
+        }
+        return {
+          ticket,
+          evaluation,
+          routedToAssigneeId:
+            ticket.status === TicketStatus.REOPENED_LOW_SCORE
+              ? ticket.assigneeId
+              : null,
+          replay: true,
+        };
+      }
+
+      const ticket = await tx.ticket.findUnique({
+        where: { externalReference: input.externalReference },
+      });
+      if (!ticket)
+        throw new ApiError(
+          404,
+          "TICKET_NOT_FOUND",
+          "Ticket correspondente não encontrado.",
+        );
+      if (ticket.status !== TicketStatus.RESOLVED) {
         throw new ApiError(
           409,
-          "INCONSISTENT_REPLAY",
-          "Avaliação repetida sem resultado correspondente.",
+          "TICKET_NOT_AWAITING_EVALUATION",
+          "O ticket não está aguardando avaliação do solicitante.",
         );
       }
-      if (ticket.externalReference !== input.externalReference) {
+      if (input.score <= 6 && !input.justification?.trim()) {
         throw new ApiError(
-          409,
-          "IDEMPOTENCY_KEY_REUSED",
-          "O identificador da avaliação já foi usado em outro ticket.",
+          422,
+          "JUSTIFICATION_REQUIRED",
+          "Notas até 6 exigem justificativa.",
         );
       }
-      return {
-        ticket,
-        evaluation,
-        routedToAssigneeId:
-          ticket.status === TicketStatus.REOPENED_LOW_SCORE
-            ? ticket.assigneeId
-            : null,
-        replay: true,
-      };
-    }
 
-    const ticket = await tx.ticket.findUnique({
-      where: { externalReference: input.externalReference },
-    });
-    if (!ticket)
-      throw new ApiError(
-        404,
-        "TICKET_NOT_FOUND",
-        "Ticket correspondente não encontrado.",
-      );
-    if (ticket.status !== TicketStatus.RESOLVED) {
-      throw new ApiError(
-        409,
-        "TICKET_NOT_AWAITING_EVALUATION",
-        "O ticket não está aguardando avaliação do solicitante.",
-      );
-    }
-    if (input.score <= 6 && !input.justification?.trim()) {
-      throw new ApiError(
-        422,
-        "JUSTIFICATION_REQUIRED",
-        "Notas até 6 exigem justificativa.",
-      );
-    }
+      const evaluation = await tx.ticketEvaluation.create({
+        data: {
+          ticketId: ticket.id,
+          resolutionCycle: ticket.resolutionCycle,
+          externalId: input.externalId,
+          score: input.score,
+          justification: input.justification,
+          expectationMet: input.expectationMet,
+          comments: input.comments,
+        },
+      });
 
-    const evaluation = await tx.ticketEvaluation.create({
-      data: {
-        ticketId: ticket.id,
-        resolutionCycle: ticket.resolutionCycle,
-        externalId: input.externalId,
-        score: input.score,
-        justification: input.justification,
-        expectationMet: input.expectationMet,
-        comments: input.comments,
-      },
-    });
+      await tx.syncExecution.create({
+        data: {
+          ticketId: ticket.id,
+          idempotencyKey,
+          event: "ticket.evaluated",
+          direction: SyncDirection.INBOUND,
+          status: SyncStatus.SUCCEEDED,
+          payload: input as unknown as Prisma.InputJsonValue,
+          response: { score: input.score },
+          attempts: 1,
+        },
+      });
 
-    await tx.syncExecution.create({
-      data: {
-        ticketId: ticket.id,
-        idempotencyKey,
-        event: "ticket.evaluated",
-        direction: SyncDirection.INBOUND,
-        status: SyncStatus.SUCCEEDED,
-        payload: input as unknown as Prisma.InputJsonValue,
-        response: { score: input.score },
-        attempts: 1,
-      },
-    });
-
-    const lowScore = input.score <= 6;
-    const updated = await tx.ticket.update({
-      where: { id: ticket.id },
-      data: lowScore
-        ? {
-            status: TicketStatus.REOPENED_LOW_SCORE,
-            resolutionCycle: { increment: 1 },
-            closedAt: null,
-            version: { increment: 1 },
-          }
-        : {
-            status: TicketStatus.CLOSED,
-            closedAt: new Date(),
-            version: { increment: 1 },
+      const lowScore = input.score <= 6;
+      const updated = await tx.ticket.update({
+        where: { id: ticket.id },
+        data: lowScore
+          ? {
+              status: TicketStatus.REOPENED_LOW_SCORE,
+              resolutionCycle: { increment: 1 },
+              closedAt: null,
+              version: { increment: 1 },
+            }
+          : {
+              status: TicketStatus.CLOSED,
+              closedAt: new Date(),
+              version: { increment: 1 },
+            },
+      });
+      await tx.ticketHistory.create({
+        data: {
+          ticketId: ticket.id,
+          action: lowScore ? "LOW_SCORE_REOPENED" : "EVALUATION_ACCEPTED",
+          fromStatus: ticket.status,
+          toStatus: updated.status,
+          details: {
+            score: input.score,
+            externalEvaluationId: input.externalId,
           },
+        },
+      });
+      return {
+        ticket: updated,
+        evaluation,
+        routedToAssigneeId: lowScore ? ticket.assigneeId : null,
+        replay: false,
+      };
     });
-    await tx.ticketHistory.create({
-      data: {
-        ticketId: ticket.id,
-        action: lowScore ? "LOW_SCORE_REOPENED" : "EVALUATION_ACCEPTED",
-        fromStatus: ticket.status,
-        toStatus: updated.status,
-        details: { score: input.score, externalEvaluationId: input.externalId },
-      },
-    });
-    return {
-      ticket: updated,
-      evaluation,
-      routedToAssigneeId: lowScore ? ticket.assigneeId : null,
-      replay: false,
-    };
-  });
+  } catch (error) {
+    if (isUniqueConstraintViolation(error)) {
+      const replay = await replayEvaluationAfterConcurrentDelivery(input);
+      if (replay) return replay;
+    }
+    throw error;
+  }
 }
 
 export async function receiveZeevStageReady(input: ZeevStageReadyInput) {
-  return prisma.$transaction(async (tx) => {
-    const previousExecution = await tx.syncExecution.findUnique({
-      where: { idempotencyKey: input.idempotencyKey },
-    });
-    if (previousExecution?.ticketId) {
+  try {
+    return await prisma.$transaction(async (tx) => {
+      const previousExecution = await tx.syncExecution.findUnique({
+        where: { idempotencyKey: input.idempotencyKey },
+      });
+      if (previousExecution?.ticketId) {
+        const ticket = await tx.ticket.findUnique({
+          where: { id: previousExecution.ticketId },
+        });
+        if (!ticket) {
+          throw new ApiError(
+            409,
+            "INCONSISTENT_REPLAY",
+            "Evento de etapa repetido sem ticket correspondente.",
+          );
+        }
+        if (ticket.externalReference !== input.ticket.externalReference) {
+          throw new ApiError(
+            409,
+            "IDEMPOTENCY_KEY_REUSED",
+            "A chave de idempotência já foi usada por outro ticket.",
+          );
+        }
+        return { ticket, replay: true };
+      }
+
       const ticket = await tx.ticket.findUnique({
-        where: { id: previousExecution.ticketId },
+        where: { externalReference: input.ticket.externalReference },
       });
       if (!ticket) {
         throw new ApiError(
-          409,
-          "INCONSISTENT_REPLAY",
-          "Evento de etapa repetido sem ticket correspondente.",
+          404,
+          "TICKET_NOT_FOUND",
+          "Ticket correspondente não encontrado.",
         );
       }
-      if (ticket.externalReference !== input.ticket.externalReference) {
+      if (
+        ticket.externalInstanceId &&
+        ticket.externalInstanceId !== String(input.source.instanceId)
+      ) {
         throw new ApiError(
           409,
-          "IDEMPOTENCY_KEY_REUSED",
-          "A chave de idempotência já foi usada por outro ticket.",
+          "INSTANCE_MISMATCH",
+          "A instância Zeev informada não corresponde ao ticket.",
         );
       }
-      return { ticket, replay: true };
-    }
 
-    const ticket = await tx.ticket.findUnique({
-      where: { externalReference: input.ticket.externalReference },
+      await tx.syncExecution.create({
+        data: {
+          ticketId: ticket.id,
+          idempotencyKey: input.idempotencyKey,
+          event: input.event,
+          direction: SyncDirection.INBOUND,
+          status: SyncStatus.SUCCEEDED,
+          payload: {
+            ...input,
+            resolutionCycle: ticket.resolutionCycle,
+          } as unknown as Prisma.InputJsonValue,
+          response: { stage: input.stage },
+          attempts: 1,
+        },
+      });
+      await tx.ticketHistory.create({
+        data: {
+          ticketId: ticket.id,
+          action: "ZEEV_STAGE_READY",
+          fromStatus: ticket.status,
+          toStatus: ticket.status,
+          details: { stage: input.stage, instanceId: input.source.instanceId },
+        },
+      });
+      return { ticket, replay: false };
     });
-    if (!ticket) {
-      throw new ApiError(
-        404,
-        "TICKET_NOT_FOUND",
-        "Ticket correspondente não encontrado.",
-      );
+  } catch (error) {
+    if (isUniqueConstraintViolation(error)) {
+      const replay = await replayStageAfterConcurrentDelivery(input);
+      if (replay) return replay;
     }
-    if (
-      ticket.externalInstanceId &&
-      ticket.externalInstanceId !== String(input.source.instanceId)
-    ) {
-      throw new ApiError(
-        409,
-        "INSTANCE_MISMATCH",
-        "A instância Zeev informada não corresponde ao ticket.",
-      );
-    }
-
-    await tx.syncExecution.create({
-      data: {
-        ticketId: ticket.id,
-        idempotencyKey: input.idempotencyKey,
-        event: input.event,
-        direction: SyncDirection.INBOUND,
-        status: SyncStatus.SUCCEEDED,
-        payload: {
-          ...input,
-          resolutionCycle: ticket.resolutionCycle,
-        } as unknown as Prisma.InputJsonValue,
-        response: { stage: input.stage },
-        attempts: 1,
-      },
-    });
-    await tx.ticketHistory.create({
-      data: {
-        ticketId: ticket.id,
-        action: "ZEEV_STAGE_READY",
-        fromStatus: ticket.status,
-        toStatus: ticket.status,
-        details: { stage: input.stage, instanceId: input.source.instanceId },
-      },
-    });
-    return { ticket, replay: false };
-  });
+    throw error;
+  }
 }

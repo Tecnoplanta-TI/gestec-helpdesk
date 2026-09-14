@@ -13,7 +13,6 @@ import {
   InformationCircleIcon,
   MoreVerticalIcon,
   PlayIcon,
-  Settings02Icon,
   StopIcon,
 } from "@/lib/icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -29,7 +28,6 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -38,7 +36,6 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import {
   DropdownMenu,
@@ -97,12 +94,6 @@ type WorkspaceFilters = {
   ticket: string;
   billable: TimeBillableFilter;
 };
-type ManagedProject = TimeProject & {
-  color: string;
-  availableToAll: boolean;
-  active: boolean;
-};
-
 function BillableButton({
   billable,
   onChange,
@@ -152,7 +143,6 @@ function jornadaHref(filters: WorkspaceFilters) {
 
 export function TimeWorkspace({
   projects,
-  managedProjects,
   recentProjectIds,
   activeTimer,
   entries,
@@ -165,7 +155,6 @@ export function TimeWorkspace({
   serverNow,
 }: {
   projects: TimeProject[];
-  managedProjects: ManagedProject[];
   recentProjectIds: string[];
   activeTimer: ActiveTimer | null;
   entries: Entry[];
@@ -508,12 +497,6 @@ export function TimeWorkspace({
                 }}
               />
             ) : null}
-            {canManageProjects ? (
-              <ManageProjectsDialog
-                projects={managedProjects}
-                onChanged={() => router.refresh()}
-              />
-            ) : null}
           </div>
           <BillableButton
             billable={billable}
@@ -826,7 +809,7 @@ export function TimeWorkspace({
               />
             </Field>
             <Field>
-              <FieldLabel>Projeto</FieldLabel>
+              <FieldLabel>Centro de custo ou projeto</FieldLabel>
               <ProjectCombobox
                 projects={projects}
                 recentProjectIds={recentProjectIds}
@@ -892,8 +875,9 @@ export function TimeWorkspace({
           <DialogHeader>
             <DialogTitle>Alterar timer em andamento</DialogTitle>
             <DialogDescription>
-              Projeto e faturabilidade do timer ativo só mudam depois da
-              confirmação. O tempo já decorrido permanece no mesmo apontamento.
+              Centro de custo ou projeto e faturabilidade do timer ativo só
+              mudam depois da confirmação. O tempo já decorrido permanece no
+              mesmo apontamento.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -910,216 +894,5 @@ export function TimeWorkspace({
         </DialogContent>
       </Dialog>
     </div>
-  );
-}
-
-function ManageProjectsDialog({
-  projects,
-  onChanged,
-}: {
-  projects: ManagedProject[];
-  onChanged: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [pending, startTransition] = useTransition();
-  const [editing, setEditing] = useState<ManagedProject | null>(null);
-  const [name, setName] = useState("");
-  const [color, setColor] = useState("#10b981");
-  const [availableToAll, setAvailableToAll] = useState(true);
-  const [billableByDefault, setBillableByDefault] = useState(false);
-  const [active, setActive] = useState(true);
-
-  function edit(project: ManagedProject) {
-    setEditing(project);
-    setName(project.name);
-    setColor(project.color);
-    setAvailableToAll(project.availableToAll);
-    setBillableByDefault(project.billableByDefault);
-    setActive(project.active);
-  }
-
-  function closeEditor() {
-    setEditing(null);
-    setName("");
-  }
-
-  function save() {
-    if (!editing) return;
-    startTransition(async () => {
-      try {
-        await apiRequest(
-          `/api/v1/gestec-help-desk/projects/${editing.id.replace("manual:", "")}`,
-          {
-            method: "PATCH",
-            body: JSON.stringify({
-              name,
-              color,
-              availableToAll,
-              billableByDefault,
-              active,
-            }),
-          },
-        );
-        toast.success(
-          active
-            ? "Projeto atualizado."
-            : "Projeto arquivado e preservado no histórico.",
-        );
-        closeEditor();
-        onChanged();
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Não foi possível atualizar o projeto.",
-        );
-      }
-    });
-  }
-
-  return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        setOpen(next);
-        if (!next) closeEditor();
-      }}
-    >
-      <DialogTrigger
-        render={
-          <Button
-            variant="outline"
-            size="icon"
-            aria-label="Gerenciar projetos manuais"
-          />
-        }
-      >
-        <HugeiconsIcon icon={Settings02Icon} />
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>
-            {editing ? "Editar projeto" : "Projetos manuais"}
-          </DialogTitle>
-          <DialogDescription>
-            {editing
-              ? "Altere os dados ou arquive sem apagar o histórico."
-              : "Centros de custo são administrados em Configurações e não aparecem nesta lista."}
-          </DialogDescription>
-        </DialogHeader>
-        {editing ? (
-          <FieldGroup>
-            <Field>
-              <FieldLabel htmlFor="managed-project-name">
-                Nome do projeto
-              </FieldLabel>
-              <Input
-                id="managed-project-name"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="managed-project-color">
-                Cor de identificação
-              </FieldLabel>
-              <Input
-                id="managed-project-color"
-                type="color"
-                value={color}
-                onChange={(event) => setColor(event.target.value)}
-                className="w-20 p-1"
-              />
-            </Field>
-            <label className="flex items-start gap-3">
-              <Checkbox
-                checked={availableToAll}
-                onCheckedChange={(value) => setAvailableToAll(Boolean(value))}
-              />
-              <span>
-                <span className="block text-sm font-medium">
-                  Disponível para todos
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  Respeita o escopo de acesso definido para a Jornada.
-                </span>
-              </span>
-            </label>
-            <label className="flex items-start gap-3">
-              <Checkbox
-                checked={billableByDefault}
-                onCheckedChange={(value) =>
-                  setBillableByDefault(Boolean(value))
-                }
-              />
-              <span>
-                <span className="block text-sm font-medium">
-                  Faturável por padrão
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  Aplica o padrão somente a novos registros.
-                </span>
-              </span>
-            </label>
-            <label className="flex items-center justify-between gap-4 rounded-lg border p-3">
-              <span>
-                <span className="block text-sm font-medium">Status ativo</span>
-                <span className="block text-xs text-muted-foreground">
-                  Arquivar remove o projeto de novos registros.
-                </span>
-              </span>
-              <Switch checked={active} onCheckedChange={setActive} />
-            </label>
-          </FieldGroup>
-        ) : (
-          <div className="max-h-[55vh] space-y-2 overflow-y-auto">
-            {projects.length ? (
-              projects.map((project) => (
-                <div
-                  key={project.id}
-                  className="flex items-center justify-between gap-4 rounded-lg border p-3"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {project.name}
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      {project.active ? "Ativo" : "Arquivado"}
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => edit(project)}
-                  >
-                    Editar
-                  </Button>
-                </div>
-              ))
-            ) : (
-              <p className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">
-                Nenhum projeto manual cadastrado.
-              </p>
-            )}
-          </div>
-        )}
-        <DialogFooter>
-          {editing ? (
-            <Button variant="outline" onClick={closeEditor}>
-              Voltar
-            </Button>
-          ) : (
-            <DialogClose render={<Button variant="outline" />}>
-              Fechar
-            </DialogClose>
-          )}
-          {editing ? (
-            <Button disabled={pending || name.trim().length < 2} onClick={save}>
-              {pending ? "Salvando…" : "Salvar alterações"}
-            </Button>
-          ) : null}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
   );
 }

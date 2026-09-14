@@ -96,8 +96,15 @@ export async function enqueueZeevSync(idempotencyKeys: string[]) {
 }
 
 async function enqueueBacklog() {
+  const staleBefore = new Date(Date.now() - 120_000);
   const pending = await prisma.syncExecution.findMany({
-    where: { status: { in: ["PENDING", "FAILED"] }, direction: "OUTBOUND" },
+    where: {
+      direction: "OUTBOUND",
+      OR: [
+        { status: { in: ["PENDING", "FAILED"] } },
+        { status: "PROCESSING", processingStartedAt: { lt: staleBefore } },
+      ],
+    },
     select: { idempotencyKey: true },
     orderBy: { createdAt: "asc" },
     take: 1_000,
@@ -117,9 +124,15 @@ async function registerWorker() {
       if (!job) return;
       const { dispatchPendingZeevSync } = await import("@/lib/domain/tickets");
       const execution = await dispatchPendingZeevSync(job.data.idempotencyKey);
-      if (execution?.status === "FAILED") {
+      if (
+        execution?.status === "FAILED" ||
+        execution?.status === "PROCESSING"
+      ) {
         throw new Error(
-          execution.lastError ?? "A sincronização com o Zeev falhou.",
+          execution.lastError ??
+            (execution.status === "PROCESSING"
+              ? "A sincronização com o Zeev já está em andamento."
+              : "A sincronização com o Zeev falhou."),
         );
       }
     },

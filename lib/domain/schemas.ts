@@ -232,6 +232,7 @@ export const costCenterUpdateSchema = z
 export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
 export const manualProjectSchema = z.object({
+  code: z.string().trim().regex(/^PRO-\d+$/i, "Use o formato PRO-0001."),
   name: z.string().trim().min(2).max(160),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   availableToAll: z.boolean().default(true),
@@ -247,6 +248,7 @@ export const manualProjectSchema = z.object({
 
 export const manualProjectUpdateSchema = z
   .object({
+    code: z.string().trim().regex(/^PRO-\d+$/i, "Use o formato PRO-0001.").optional(),
     name: z.string().trim().min(2).max(160).optional(),
     color: z
       .string()
@@ -279,7 +281,8 @@ export const timeGoalSchema = z
     title: z.string().trim().min(2).max(160),
     targetSeconds: z.number().int().positive().max(31_536_000),
     startsOn: isoDateSchema,
-    endsOn: isoDateSchema,
+    endsOn: isoDateSchema.nullable(),
+    permanent: z.boolean().default(false),
     targetUserId: z.string().uuid().nullable().optional(),
     targetGroupId: z.string().uuid().nullable().optional(),
     manualProjectId: z.string().uuid().nullable().optional(),
@@ -289,10 +292,28 @@ export const timeGoalSchema = z
     if (Boolean(value.targetUserId) === Boolean(value.targetGroupId)) {
       context.addIssue({ code: "custom", message: "Selecione exatamente um usuário ou grupo.", path: ["targetUserId"] });
     }
-    if (value.endsOn < value.startsOn) {
+    if (value.permanent && value.endsOn !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "Metas permanentes não possuem data final.",
+        path: ["endsOn"],
+      });
+    }
+    if (!value.permanent && value.endsOn === null) {
+      context.addIssue({
+        code: "custom",
+        message: "Informe a data final ou marque a meta como permanente.",
+        path: ["endsOn"],
+      });
+    }
+    if (value.endsOn !== null && value.endsOn < value.startsOn) {
       context.addIssue({ code: "custom", message: "A data final não pode ser anterior à inicial.", path: ["endsOn"] });
     }
   });
+
+export const timeGoalStatusSchema = z.object({
+  active: z.boolean(),
+});
 
 export const timerStartSchema = z.object({
   description: z.string().trim().min(1).max(500),

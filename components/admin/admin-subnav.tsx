@@ -12,6 +12,8 @@ const items = [
   { href: "/gestec_help_desk/admin/tickets", label: "Tickets" },
   { href: "/gestec_help_desk/admin/apontamentos", label: "Apontamentos" },
   { href: "/gestec_help_desk/admin/projetos", label: "Projetos" },
+  { href: "/gestec_help_desk/admin/metas", label: "Metas" },
+  { href: "/gestec_help_desk/admin/grupos", label: "Grupos" },
   {
     href: "/gestec_help_desk/admin/centros-de-custo",
     label: "Centros de custo",

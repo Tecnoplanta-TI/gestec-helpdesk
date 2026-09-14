@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { AdminTicketForm } from "@/components/admin/ticket-form";
-import { requirePermission } from "@/lib/auth/session";
+import { requirePagePermission } from "@/lib/auth/page-session";
 import { ticketInclude } from "@/lib/domain/tickets";
 import { prisma } from "@/lib/prisma";
 
@@ -12,7 +12,7 @@ export default async function AdminTicketPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requirePermission("admin:manage");
+  await requirePagePermission("admin:manage");
   const { id } = await params;
   const [ticket, users, costCenters, services] = await Promise.all([
     prisma.ticket.findUnique({
