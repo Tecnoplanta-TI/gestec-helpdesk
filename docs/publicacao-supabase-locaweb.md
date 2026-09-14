@@ -17,8 +17,10 @@ executa `db:seed` em nenhum ambiente de produção.
    ```
 
 2. O menu restrito é controlado por
-   `NEXT_PUBLIC_HELP_DESK_JORNADA_ONLY=true`. Como a variável é pública e
-   incorporada no build, alterá-la exige reconstruir a imagem.
+   `NEXT_PUBLIC_HELP_DESK_JORNADA_ONLY=true`. Nesse modo, **Jornada** e
+   **Relatórios** permanecem ativos; os demais itens ficam indisponíveis.
+   Como a variável é pública e incorporada no build, alterá-la exige
+   reconstruir a imagem.
 
 3. Use a rota `GET /api/health` para verificar se a aplicação e o PostgreSQL
    estão disponíveis. Ela não expõe dados, tokens nem detalhes de conexão.
@@ -99,6 +101,7 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
 - `/api/health` retorna HTTP 200;
 - o worker cria/processa uma sincronização Zeev pendente após iniciar;
 - o Gestec assina a identidade de produção corretamente;
-- o menu mostra somente **Jornada** ativa, com os outros itens cinza e riscados;
+- o menu mostra **Jornada** e **Relatórios** ativos, com os outros itens cinza
+  e riscados;
 - não há ticket, anexo ou dado demonstrativo não aprovado no Supabase;
 - a cópia local e a cópia de anexos permanecem disponíveis até a validação final.

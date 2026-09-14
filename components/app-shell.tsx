@@ -104,6 +104,11 @@ function isJornadaOnlyModeEnabled() {
   return process.env.NEXT_PUBLIC_HELP_DESK_JORNADA_ONLY === "true";
 }
 
+const jornadaOnlyAvailableRoutes = new Set([
+  "/gestec_help_desk/jornada",
+  "/gestec_help_desk/relatorios",
+]);
+
 export function AppShell({
   children,
   user,
@@ -153,7 +158,7 @@ export function AppShell({
                     .map((item) => {
                       const available =
                         !jornadaOnlyMode ||
-                        item.href === "/gestec_help_desk/jornada";
+                        jornadaOnlyAvailableRoutes.has(item.href);
 
                       return (
                         <SidebarMenuItem key={item.href}>
