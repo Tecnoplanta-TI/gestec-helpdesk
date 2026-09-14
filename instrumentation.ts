@@ -6,6 +6,11 @@ export async function register() {
     return;
   }
 
-  // pg-boss is initialized from the authenticated module layout. Keeping it
-  // outside this graph avoids bundling `pg` for the Edge instrumentation build.
+  const { startZeevSyncWorker } = await import("@/lib/jobs/zeev-sync-queue");
+  void startZeevSyncWorker().catch((error) => {
+    console.error(
+      "Não foi possível iniciar o worker de sincronização do Zeev.",
+      error,
+    );
+  });
 }

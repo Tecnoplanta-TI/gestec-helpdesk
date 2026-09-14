@@ -100,6 +100,10 @@ const navigation: Array<{
   },
 ];
 
+function isJornadaOnlyModeEnabled() {
+  return process.env.NEXT_PUBLIC_HELP_DESK_JORNADA_ONLY === "true";
+}
+
 export function AppShell({
   children,
   user,
@@ -108,6 +112,7 @@ export function AppShell({
   user: { name: string; email: string; role: UserRole };
 }) {
   const pathname = usePathname();
+  const jornadaOnlyMode = isJornadaOnlyModeEnabled();
   const initials = user.name
     .split(" ")
     .slice(0, 2)
@@ -145,25 +150,50 @@ export function AppShell({
                 <SidebarMenu>
                   {visibleNavigation
                     .filter((item) => item.group === group)
-                    .map((item) => (
-                      <SidebarMenuItem key={item.href}>
-                        <SidebarMenuButton
-                          render={<Link href={item.href} prefetch={true} />}
-                          isActive={
-                            item.href === "/gestec_help_desk/tickets"
-                              ? pathname === item.href ||
-                                pathname.startsWith(`${item.href}/`)
-                              : pathname.startsWith(item.href)
-                          }
-                          tooltip={item.label}
-                        >
-                          <>
+                    .map((item) => {
+                      const available =
+                        !jornadaOnlyMode ||
+                        item.href === "/gestec_help_desk/jornada";
+
+                      return (
+                        <SidebarMenuItem key={item.href}>
+                          <SidebarMenuButton
+                            render={
+                              available ? (
+                                <Link href={item.href} prefetch={true} />
+                              ) : (
+                                <span />
+                              )
+                            }
+                            aria-disabled={!available || undefined}
+                            isActive={
+                              available &&
+                              (item.href === "/gestec_help_desk/tickets"
+                                ? pathname === item.href ||
+                                  pathname.startsWith(`${item.href}/`)
+                                : pathname.startsWith(item.href))
+                            }
+                            tooltip={
+                              available
+                                ? item.label
+                                : `${item.label} — indisponível nesta fase`
+                            }
+                            className={
+                              available
+                                ? undefined
+                                : "cursor-not-allowed text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
+                            }
+                          >
                             <HugeiconsIcon icon={item.icon} strokeWidth={1.8} />
-                            <span>{item.label}</span>
-                          </>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
+                            <span
+                              className={available ? undefined : "line-through"}
+                            >
+                              {item.label}
+                            </span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

@@ -7,6 +7,7 @@
     "dev": "next dev",
     "dev:turbo": "next dev --turbopack",
     "build": "next build",
+    "build:isolated": "set NEXT_DIST_DIR=.next-production&& next build",
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
@@ -18,6 +19,7 @@
     "db:migrate": "prisma migrate dev",
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node prisma/seed.mjs",
+    "db:inspect": "node scripts/inspect-database.mjs",
     "zeev:tunnel": "node scripts/zeev-tunnel.mjs",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
   },
