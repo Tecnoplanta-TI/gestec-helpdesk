@@ -10,5 +10,5 @@ export default async function Page() {
     if (error instanceof ApiError && error.status === 401) redirect("/login");
     throw error;
   }
-  redirect("/gestec_help_desk/jornada");
+  redirect("/gestec_help_desk/tickets");
 }
