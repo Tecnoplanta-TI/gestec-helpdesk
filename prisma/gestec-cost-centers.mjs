@@ -2,6 +2,7 @@
 export const gestecCostCenters = [
   { code: "2", name: "Viveiro UBR" },
   { code: "3", name: "VIVEIRO OLIVEIRAS" },
+  { code: "4", name: "OLIVAL BARRA" },
   { code: "5", name: "ADMINISTRATIVO RH" },
   { code: "6", name: "CAMINHOES" },
   { code: "7", name: "VIVEIRO BARBA NEGRA" },
@@ -28,6 +29,7 @@ export const gestecCostCenters = [
   { code: "30", name: "HF FEIJO" },
   { code: "31", name: "HF CARPELO" },
   { code: "33", name: "VEICULOS LEVES" },
+  { code: "36", name: "PRESTAÇÃO SERVIÇOS OLIVEIRAS" },
   { code: "40", name: "VIVEIRO PR" },
   { code: "42", name: "CONTABILIDADE" },
   { code: "45", name: "DIRECAO" },
