@@ -10,6 +10,9 @@ export async function requirePagePermission(permission: Permission) {
   try {
     return await requirePermission(permission);
   } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      redirect("/login");
+    }
     if (error instanceof ApiError && error.status === 403) {
       redirect("/gestec_help_desk/tickets");
     }

@@ -19,6 +19,16 @@ export interface GestecSession {
 
 interface GestecIdentity extends Omit<GestecSession, "userId"> {
   sourceUserId: string;
+  authUserId?: string;
+}
+
+function configuredSupabaseAdministrators() {
+  return new Set(
+    (process.env.SUPABASE_ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+  );
 }
 
 function parseRole(value: string | undefined, fallback?: UserRole): UserRole {
@@ -63,7 +73,7 @@ const syncedUsers = new Map<
 const USER_SYNC_TTL_MS = 60_000;
 
 function identityFingerprint(identity: GestecIdentity) {
-  return `${identity.sourceUserId}|${identity.name}|${identity.email}|${identity.role}`;
+  return `${identity.sourceUserId}|${identity.authUserId ?? ""}|${identity.name}|${identity.email}|${identity.role}`;
 }
 
 async function resolveLocalSession(identity: GestecIdentity) {
@@ -90,28 +100,39 @@ async function resolveLocalSession(identity: GestecIdentity) {
   }
 
   const user = await prisma.$transaction(async (tx) => {
-    const [byExternalId, byEmail] = await Promise.all([
+    const [byExternalId, byEmail, byAuthUserId] = await Promise.all([
       tx.userRef.findUnique({ where: { externalId: identity.externalId } }),
       tx.userRef.findUnique({ where: { email: identity.email } }),
+      identity.authUserId
+        ? tx.userRef.findUnique({ where: { authUserId: identity.authUserId } })
+        : null,
     ]);
-    if (byExternalId && byEmail && byExternalId.id !== byEmail.id) {
+    const candidates = [byExternalId, byEmail, byAuthUserId].filter(
+      (user): user is NonNullable<typeof user> => Boolean(user),
+    );
+    if (new Set(candidates.map((user) => user.id)).size > 1) {
       throw new ApiError(
         409,
         "AUTH_IDENTITY_CONFLICT",
         "A identidade do Gestec conflita com outro usuário já sincronizado.",
       );
     }
-    const existing = byExternalId ?? byEmail;
+    const existing = candidates[0];
     const identityData = {
       externalId: identity.externalId,
       name: identity.name,
       email: identity.email,
       role: identity.role,
+      authUserId: identity.authUserId,
     };
     return existing
       ? tx.userRef.update({ where: { id: existing.id }, data: identityData })
       : tx.userRef.create({
-          data: { id: randomUUID(), ...identityData, active: true },
+          data: {
+            id: identity.authUserId ?? randomUUID(),
+            ...identityData,
+            active: true,
+          },
         });
   });
   if (!user.active) {
@@ -140,6 +161,53 @@ export const getGestecSession = cache(
   async function getGestecSession(): Promise<GestecSession> {
     if (process.env.GESTEC_AUTH_MODE === "development") {
       return resolveLocalSession(developmentIdentity());
+    }
+
+    if (process.env.GESTEC_AUTH_MODE === "supabase") {
+      const { createSupabaseServerClient } = await import(
+        "@/lib/supabase/server"
+      );
+      const supabase = await createSupabaseServerClient();
+      const { data, error } = await supabase.auth.getClaims();
+      const claims = data?.claims;
+      const email = typeof claims?.email === "string" ? claims.email : "";
+      const subject = typeof claims?.sub === "string" ? claims.sub : "";
+      if (error || !subject || !email) {
+        throw new ApiError(401, "AUTH_REQUIRED", "Faça login para acessar o Help Desk.");
+      }
+
+      const metadata =
+        claims?.user_metadata && typeof claims.user_metadata === "object"
+          ? claims.user_metadata
+          : {};
+      const displayName =
+        typeof metadata.full_name === "string"
+          ? metadata.full_name
+          : typeof metadata.name === "string"
+            ? metadata.name
+            : email.split("@")[0];
+      const current = await prisma.userRef.findFirst({
+        where: { OR: [{ authUserId: subject }, { email }] },
+        select: { role: true },
+      });
+      const isAdministrator = configuredSupabaseAdministrators().has(
+        email.toLowerCase(),
+      );
+      return resolveLocalSession({
+        sourceUserId: subject,
+        authUserId: subject,
+        externalId: `supabase:${subject}`,
+        name: displayName,
+        email: email.toLowerCase(),
+        // Only the e-mails explicitly allowed by the production environment
+        // can receive ADMIN. This also removes a stale ADMIN role at the next
+        // login when an address is removed from the allowlist.
+        role: isAdministrator
+          ? UserRole.ADMIN
+          : current?.role === UserRole.ADMIN
+            ? UserRole.TECHNICIAN
+            : (current?.role ?? UserRole.TECHNICIAN),
+      });
     }
 
     const requestHeaders = await headers();

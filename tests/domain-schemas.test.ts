@@ -161,10 +161,9 @@ describe("contratos do domínio", () => {
   it("aceita metas permanentes sem data final e exige fim em metas temporárias", () => {
     const baseGoal = {
       title: "Meta contínua",
-      targetSeconds: 160 * 60 * 60,
+      targetSeconds: 8 * 60 * 60,
       startsOn: "2026-09-11",
       targetUserId: "00000000-0000-4000-8000-000000000001",
-      targetGroupId: null,
     };
 
     expect(
@@ -186,6 +185,33 @@ describe("contratos do domínio", () => {
         ...baseGoal,
         permanent: true,
         endsOn: "2026-09-30",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("limita metas diárias a 24 horas", () => {
+    expect(
+      timeGoalSchema.safeParse({
+        title: "Meta diária",
+        targetSeconds: 24 * 60 * 60 + 1,
+        startsOn: "2026-09-11",
+        endsOn: null,
+        permanent: true,
+        targetUserId: "00000000-0000-4000-8000-000000000001",
+      }).success,
+    ).toBe(false);
+  });
+
+  it("aceita somente metas configuradas por dia", () => {
+    expect(
+      timeGoalSchema.safeParse({
+        title: "Meta diária",
+        targetSeconds: 8 * 60 * 60,
+        period: "MONTHLY",
+        startsOn: "2026-09-11",
+        endsOn: null,
+        permanent: true,
+        targetUserId: "00000000-0000-4000-8000-000000000001",
       }).success,
     ).toBe(false);
   });

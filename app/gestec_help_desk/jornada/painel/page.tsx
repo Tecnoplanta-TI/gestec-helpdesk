@@ -2,8 +2,11 @@ import { addMonths, startOfMonth } from "date-fns";
 
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
-import { monthlyGoalSeconds } from "@/lib/domain/time-goals";
-import { effectiveGoalSecondsByUser } from "@/lib/domain/effective-goals";
+import {
+  DAILY_GOAL_SECONDS,
+  monthlyGoalSeconds,
+} from "@/lib/domain/time-goals";
+import { effectiveDailyGoalSecondsByUser } from "@/lib/domain/effective-goals";
 import { listTeamMonthHours } from "@/lib/domain/team-time";
 import {
   operationalTimeWhere,
@@ -71,12 +74,16 @@ export default async function JornadaPainelPage({
       }),
     ]);
 
-  const fallbackGoalSeconds = monthlyGoalSeconds(now);
-  const goalSecondsByUser = await effectiveGoalSecondsByUser(
+  const dailyGoalSecondsByUser = await effectiveDailyGoalSecondsByUser(
     [session.userId, ...team.map((member) => member.userId)],
     now,
-    fallbackGoalSeconds,
+    DAILY_GOAL_SECONDS,
   );
+  const monthlySecondsForUser = (userId: string) =>
+    monthlyGoalSeconds(
+      dailyGoalSecondsByUser.get(userId) ?? DAILY_GOAL_SECONDS,
+      now,
+    );
 
   return (
     <TimeDashboard
@@ -85,12 +92,11 @@ export default async function JornadaPainelPage({
       monthSeconds={monthEntries._sum.durationSeconds ?? 0}
       billableSeconds={monthBillable._sum.durationSeconds ?? 0}
       monthlyGoalSeconds={
-        goalSecondsByUser.get(session.userId) ?? fallbackGoalSeconds
+        monthlySecondsForUser(session.userId)
       }
       team={team.map((member) => ({
         ...member,
-        goalSeconds:
-          goalSecondsByUser.get(member.userId) ?? fallbackGoalSeconds,
+          goalSeconds: monthlySecondsForUser(member.userId),
       }))}
     />
   );

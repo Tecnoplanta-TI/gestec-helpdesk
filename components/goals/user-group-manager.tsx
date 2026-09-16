@@ -82,8 +82,7 @@ export function UserGroupManager({
           Grupos de usuários
         </h1>
         <p className="text-sm text-muted-foreground">
-          Use os grupos para distribuir metas de horas e notificações a uma
-          equipe.
+          Organize usuários em equipes para referência administrativa.
         </p>
       </div>
       <section className="rounded-xl border p-4">

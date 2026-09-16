@@ -35,11 +35,16 @@ executa `db:seed` em nenhum ambiente de produção.
    npm run db:inspect
    ```
 
-4. Decida o escopo antes da exclusão:
-   - **somente operação de teste:** tickets, comentários, anexos, histórico,
-     apontamentos, timers, notificações, avaliações, sincronizações e auditoria;
-   - **tudo:** inclui também usuários, clientes/centros de custo, serviços,
-     projetos, grupos de usuários, metas e ativos.
+4. Para remover usuários locais e os dados operacionais que dependem deles,
+   preservando centros de custo, serviços, projetos e ativos, execute:
+
+   ```powershell
+   npm run db:reset-local-users -- --confirm=ZERAR_USUARIOS_LOCAIS
+   ```
+
+   O comando recusa qualquer banco que não seja `localhost`/`127.0.0.1` e exige
+   a confirmação literal acima. Ele não apaga arquivos de anexo fora do banco;
+   revise a cópia de `storage/attachments` antes de removê-los manualmente.
 
 Não use `prisma migrate reset` como atalho: ele reaplica o seed de desenvolvimento
 e pode repovoar dados demonstrativos. A limpeza deve ser executada somente após
@@ -50,10 +55,16 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
 1. Crie um projeto Supabase exclusivo para o Help Desk, inicialmente em
    homologação.
 2. Em **Connect**, copie a conexão direta ou o **Session Pooler na porta 5432**.
-   Não use o Transaction Pooler (porta 6543) para o worker `pg-boss`.
+   Esta publicação não inicia worker, fila ou integração com o Zeev.
 3. Preencha `deploy/.env.production` a partir de
    `deploy/.env.production.example`, sem versionar o arquivo.
-4. Para executar a migração a partir de uma máquina confiável, defina as duas
+4. Em **Authentication > Providers**, deixe **Email** habilitado e crie o
+   primeiro usuário no painel do Supabase. Copie a URL do projeto e a chave
+   pública em **Connect/API** para `NEXT_PUBLIC_SUPABASE_URL` e
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. A variável
+   `SUPABASE_ADMIN_EMAILS` já contém os dois únicos e-mails que podem receber
+   **ADMIN** no primeiro login. Os demais usuários iniciam como **TECHNICIAN**.
+5. Para executar a migração a partir de uma máquina confiável, defina as duas
    URLs do Supabase naquela sessão e execute somente:
 
    ```powershell
@@ -63,7 +74,11 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
 
 5. Não execute `npm run db:seed` nem `npm run db:migrate` contra o Supabase.
    `db:migrate` é o fluxo de desenvolvimento e pode precisar de um banco shadow.
-6. Depois da migração, rode `npm run db:inspect` apontando para o Supabase e
+6. A migração habilita RLS em todas as tabelas da aplicação. Pelo Data API,
+   `anon` não possui acesso e `authenticated` pode consultar somente o próprio
+   perfil em `UserRef`; tickets e operações continuam passando pelas APIs do
+   Help Desk, que aplicam as permissões internas no servidor.
+7. Depois da migração, rode `npm run db:inspect` apontando para o Supabase e
    registre as contagens. Antes do go-live, elas devem refletir somente os
    cadastros aprovados para produção.
 
@@ -75,12 +90,17 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
    `deploy/.env.production.example` para `deploy/.env.production` e preencha
    os segredos reais. Gere segredos longos e diferentes para a autenticação do
    Gestec, entrada Zeev e callback Zeev.
-3. Mantenha `GESTEC_AUTH_MODE=production` e
-   `GESTEC_ALLOW_DEV_AUTH=false`.
-4. Garanta uma pasta persistente, por exemplo
+3. Use `GESTEC_AUTH_MODE=supabase` e `GESTEC_ALLOW_DEV_AUTH=false`. Preencha
+   também as duas variáveis públicas do Supabase e
+   `SUPABASE_ADMIN_EMAILS`. Não use nem publique a `service_role` no
+   navegador ou no arquivo de ambiente do Help Desk.
+4. Mantenha `ZEEV_SYNC_ENABLED=false`. Os valores `ZEEV_*` não precisam ser
+   preenchidos nesta publicação: o app não cria worker e os endpoints Zeev
+   respondem como indisponíveis.
+5. Garanta uma pasta persistente, por exemplo
    `/var/lib/gestec-helpdesk/storage`, para anexos. A imagem nunca armazena
    anexos somente na camada temporária do container.
-5. Construa e inicie o serviço:
+6. Construa e inicie o serviço:
 
    ```bash
    docker compose --env-file deploy/.env.production -f deploy/docker-compose.production.yml up -d --build
@@ -88,19 +108,19 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
    curl --fail http://127.0.0.1:3000/api/health
    ```
 
-6. Configure Nginx com base em `deploy/nginx/helpdesk.conf.example`, substitua
+7. Configure Nginx com base em `deploy/nginx/helpdesk.conf.example`, substitua
    o domínio e habilite HTTPS antes de expor o endereço. O container fica
    ligado apenas a `127.0.0.1`; Nginx é o único ponto público.
-7. No Gestec e no Zeev, atualize as URLs de callback somente depois do HTTPS
-   responder com sucesso. Faça um ticket real controlado e confirme o ciclo
-   completo: entrada, triagem, contato, atendimento, conclusão e avaliação.
+8. Não configure callbacks no Gestec nem no Zeev nesta publicação. Valide
+   apenas login, Jornada e Relatórios.
 
 ## 5. Critérios de aceite
 
 - `docker compose ... ps` mostra o serviço saudável;
 - `/api/health` retorna HTTP 200;
-- o worker cria/processa uma sincronização Zeev pendente após iniciar;
-- o Gestec assina a identidade de produção corretamente;
+- o login do Supabase impede acesso sem sessão e permite os dois
+  administradores autorizados entrarem;
+- o Data API do Supabase não permite acesso anônimo às tabelas do Help Desk;
 - o menu mostra **Jornada** e **Relatórios** ativos, com os outros itens cinza
   e riscados;
 - não há ticket, anexo ou dado demonstrativo não aprovado no Supabase;

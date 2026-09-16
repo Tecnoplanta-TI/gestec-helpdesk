@@ -1,6 +1,7 @@
 import { PgBoss } from "pg-boss";
 
 import { prisma } from "@/lib/prisma";
+import { isZeevSyncEnabled } from "@/lib/features/zeev";
 
 const QUEUE_NAME = "zeev-outbound-sync";
 const DEAD_LETTER_QUEUE = "zeev-outbound-sync-dead-letter";
@@ -73,7 +74,7 @@ async function enqueueExistingExecution(idempotencyKey: string) {
 }
 
 export async function enqueueZeevSync(idempotencyKeys: string[]) {
-  if (process.env.NODE_ENV === "test") return;
+  if (process.env.NODE_ENV === "test" || !isZeevSyncEnabled()) return;
   void startZeevSyncWorker().catch((error) => {
     console.error(
       "O worker do Zeev não iniciou; o backlog será retomado depois.",
@@ -141,6 +142,7 @@ async function registerWorker() {
 }
 
 export async function startZeevSyncWorker() {
+  if (!isZeevSyncEnabled()) return;
   globalForJobs.gestecZeevWorker ??= registerWorker().catch((error) => {
     delete globalForJobs.gestecZeevWorker;
     throw error;

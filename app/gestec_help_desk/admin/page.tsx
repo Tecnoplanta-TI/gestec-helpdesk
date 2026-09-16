@@ -12,12 +12,12 @@ const sections = [
   {
     href: "/gestec_help_desk/admin/grupos",
     title: "Grupos de usuários",
-    description: "Cadastre equipes para metas e notificações.",
+    description: "Cadastre e organize equipes de usuários.",
   },
   {
     href: "/gestec_help_desk/admin/metas",
     title: "Metas de horas",
-    description: "Defina metas individuais ou por grupo de usuários.",
+        description: "Defina metas individuais em horas por dia.",
   },
   {
     href: "/gestec_help_desk/admin/usuarios",

@@ -153,6 +153,7 @@ export function TimeWorkspace({
   canManageProjects,
   exportHref,
   serverNow,
+  dailyGoalSeconds,
 }: {
   projects: TimeProject[];
   recentProjectIds: string[];
@@ -171,6 +172,7 @@ export function TimeWorkspace({
   canManageProjects: boolean;
   exportHref: string | null;
   serverNow: string;
+  dailyGoalSeconds: number;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -607,7 +609,10 @@ export function TimeWorkspace({
         </div>
       </div>
 
-      <JornadaHourBoxes todaySeconds={totals.today} />
+      <JornadaHourBoxes
+        todaySeconds={totals.today}
+        dailyGoalSeconds={dailyGoalSeconds}
+      />
 
       <Card>
         <CardHeader className="gap-4">

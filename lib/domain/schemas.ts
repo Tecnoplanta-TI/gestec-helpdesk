@@ -280,18 +280,17 @@ export const timeGoalSchema = z
   .object({
     title: z.string().trim().min(2).max(160),
     targetSeconds: z.number().int().positive().max(31_536_000),
+    // Goals are always configured as hours per calendar day. The monthly
+    // equivalent is derived at display time from the number of days in month.
+    period: z.literal("DAILY").default("DAILY"),
     startsOn: isoDateSchema,
     endsOn: isoDateSchema.nullable(),
     permanent: z.boolean().default(false),
-    targetUserId: z.string().uuid().nullable().optional(),
-    targetGroupId: z.string().uuid().nullable().optional(),
+    targetUserId: z.string().uuid(),
     manualProjectId: z.string().uuid().nullable().optional(),
     costCenterId: z.string().uuid().nullable().optional(),
   })
   .superRefine((value, context) => {
-    if (Boolean(value.targetUserId) === Boolean(value.targetGroupId)) {
-      context.addIssue({ code: "custom", message: "Selecione exatamente um usuário ou grupo.", path: ["targetUserId"] });
-    }
     if (value.permanent && value.endsOn !== null) {
       context.addIssue({
         code: "custom",
@@ -308,6 +307,13 @@ export const timeGoalSchema = z
     }
     if (value.endsOn !== null && value.endsOn < value.startsOn) {
       context.addIssue({ code: "custom", message: "A data final não pode ser anterior à inicial.", path: ["endsOn"] });
+    }
+    if (value.targetSeconds > 86_400) {
+      context.addIssue({
+        code: "custom",
+        message: "Uma meta diária não pode ultrapassar 24 horas.",
+        path: ["targetSeconds"],
+      });
     }
   });
 

@@ -34,6 +34,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { hasPermission, type Permission } from "@/lib/auth/permissions";
+import { isJornadaOnlyModeEnabled } from "@/lib/features/jornada-only";
 
 const navigation: Array<{
   href: string;
@@ -100,10 +101,6 @@ const navigation: Array<{
   },
 ];
 
-function isJornadaOnlyModeEnabled() {
-  return process.env.NEXT_PUBLIC_HELP_DESK_JORNADA_ONLY === "true";
-}
-
 const jornadaOnlyAvailableRoutes = new Set([
   "/gestec_help_desk/jornada",
   "/gestec_help_desk/relatorios",
@@ -158,7 +155,9 @@ export function AppShell({
                     .map((item) => {
                       const available =
                         !jornadaOnlyMode ||
-                        jornadaOnlyAvailableRoutes.has(item.href);
+                        jornadaOnlyAvailableRoutes.has(item.href) ||
+                        (item.permission === "admin:manage" &&
+                          hasPermission(user.role, "admin:manage"));
 
                       return (
                         <SidebarMenuItem key={item.href}>
@@ -216,6 +215,11 @@ export function AppShell({
               </p>
             </div>
           </div>
+          <form action="/auth/sign-out" method="post" className="px-2 pb-2 group-data-[collapsible=icon]:hidden">
+            <button className="text-xs text-muted-foreground hover:text-foreground" type="submit">
+              Sair da conta
+            </button>
+          </form>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

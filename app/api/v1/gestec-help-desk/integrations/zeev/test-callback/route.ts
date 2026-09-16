@@ -3,9 +3,11 @@ import { Prisma, SyncDirection, SyncStatus } from "@prisma/client";
 import { assertBearerToken } from "@/lib/domain/integrations";
 import { errorResponse, readJson } from "@/lib/http/api-error";
 import { prisma } from "@/lib/prisma";
+import { requireZeevSyncEnabled } from "@/lib/features/zeev";
 
 export async function GET(request: Request) {
   try {
+    requireZeevSyncEnabled();
     assertBearerToken(request, process.env.ZEEV_CALLBACK_TOKEN);
     const items = await prisma.syncExecution.findMany({
       where: { direction: SyncDirection.OUTBOUND },
@@ -25,6 +27,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    requireZeevSyncEnabled();
     assertBearerToken(request, process.env.ZEEV_CALLBACK_TOKEN);
     const idempotencyKey = request.headers.get("idempotency-key");
     if (!idempotencyKey) {

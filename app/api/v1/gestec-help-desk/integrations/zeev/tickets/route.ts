@@ -4,9 +4,11 @@ import {
 } from "@/lib/domain/integrations";
 import { zeevTicketSchema } from "@/lib/domain/schemas";
 import { errorResponse, readJson } from "@/lib/http/api-error";
+import { requireZeevSyncEnabled } from "@/lib/features/zeev";
 
 export async function POST(request: Request) {
   try {
+    requireZeevSyncEnabled();
     assertBearerToken(request, process.env.ZEEV_INBOUND_TOKEN);
     const input = zeevTicketSchema.parse(await readJson(request));
     const result = await receiveZeevTicket(input);

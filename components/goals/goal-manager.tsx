@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
 import {
   Field,
   FieldContent,
@@ -20,6 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { daysInMonth, monthlyGoalSeconds } from "@/lib/domain/time-goals";
 import {
   currentLocalDateValue,
   formatDateOnly,
@@ -28,7 +30,6 @@ import {
 import { apiRequest } from "@/lib/http/client";
 
 type User = { id: string; name: string };
-type Group = { id: string; name: string };
 type Goal = {
   id: string;
   title: string;
@@ -37,8 +38,7 @@ type Goal = {
   endsOn: string | null;
   permanent: boolean;
   active: boolean;
-  targetUser: User | null;
-  targetGroup: Group | null;
+  targetUser: User;
   project: { name: string } | null;
   client: { name: string } | null;
 };
@@ -46,17 +46,15 @@ type Goal = {
 export function GoalManager({
   goals: initialGoals,
   users,
-  groups,
   canManage,
 }: {
   goals: Goal[];
   users: User[];
-  groups: Group[];
   canManage: boolean;
 }) {
   const [goals, setGoals] = useState(initialGoals);
   const [pending, startTransition] = useTransition();
-  const [targetType, setTargetType] = useState<"user" | "group">("user");
+  const [deleting, setDeleting] = useState<Goal | null>(null);
   const [targetId, setTargetId] = useState("");
   const [title, setTitle] = useState("");
   const [hours, setHours] = useState("");
@@ -66,9 +64,14 @@ export function GoalManager({
   const [permanent, setPermanent] = useState(false);
   const hoursValue = Number(hours.replace(",", "."));
   const invalidHours =
-    !Number.isFinite(hoursValue) || hoursValue <= 0 || hoursValue > 8_760;
+    !Number.isFinite(hoursValue) || hoursValue <= 0 || hoursValue > 24;
   const invalidPeriod =
     !startsOn || (!permanent && (!endsOn || endsOn < startsOn));
+  const referenceMonth = new Date(`${startsOn || today}T12:00:00`);
+  const referenceMonthDays = daysInMonth(referenceMonth);
+  const monthlyEquivalentSeconds = invalidHours
+    ? null
+    : monthlyGoalSeconds(Math.round(hoursValue * 3600), referenceMonth);
   function create() {
     startTransition(async () => {
       try {
@@ -80,8 +83,7 @@ export function GoalManager({
             startsOn,
             endsOn: permanent ? null : endsOn,
             permanent,
-            targetUserId: targetType === "user" ? targetId : null,
-            targetGroupId: targetType === "group" ? targetId : null,
+            targetUserId: targetId,
           }),
         });
         setGoals((current) => [goal, ...current]);
@@ -89,7 +91,7 @@ export function GoalManager({
         setHours("");
         setTargetId("");
         setPermanent(false);
-        toast.success("Meta criada e os envolvidos foram notificados.");
+        toast.success("Meta criada e o usuário foi notificado.");
       } catch (error) {
         toast.error(
           error instanceof Error
@@ -99,6 +101,28 @@ export function GoalManager({
       }
     });
   }
+
+  function deleteGoal() {
+    if (!deleting) return;
+    startTransition(async () => {
+      try {
+        const result = await apiRequest<{ id: string }>(
+          `/api/v1/gestec-help-desk/goals/${deleting.id}`,
+          { method: "DELETE" },
+        );
+        setGoals((current) => current.filter((goal) => goal.id !== result.id));
+        setDeleting(null);
+        toast.success("Meta excluída definitivamente.");
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível excluir a meta.",
+        );
+      }
+    });
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div>
@@ -106,7 +130,8 @@ export function GoalManager({
           Metas de horas
         </h1>
         <p className="text-sm text-muted-foreground">
-          Metas individuais têm precedência sobre metas equivalentes de grupo.
+          Defina metas individuais em horas por dia. O total mensal é calculado
+          automaticamente pelos dias corridos de cada mês.
         </p>
       </div>
       {canManage ? (
@@ -123,27 +148,7 @@ export function GoalManager({
               />
             </Field>
             <Field>
-              <FieldLabel htmlFor="goal-target-type">Aplicar para</FieldLabel>
-              <Select
-                value={targetType}
-                onValueChange={(value) => {
-                  setTargetType(value as "user" | "group");
-                  setTargetId("");
-                }}
-              >
-                <SelectTrigger id="goal-target-type" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">Usuário</SelectItem>
-                  <SelectItem value="group">Grupo de usuários</SelectItem>
-                </SelectContent>
-              </Select>
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="goal-target">
-                {targetType === "user" ? "Usuário" : "Grupo"}
-              </FieldLabel>
+              <FieldLabel htmlFor="goal-target">Usuário</FieldLabel>
               <Select
                 value={targetId}
                 onValueChange={(value) => setTargetId(value ?? "")}
@@ -152,7 +157,7 @@ export function GoalManager({
                   <SelectValue placeholder="Selecione" />
                 </SelectTrigger>
                 <SelectContent>
-                  {(targetType === "user" ? users : groups).map((item) => (
+                  {users.map((item) => (
                     <SelectItem key={item.id} value={item.id}>
                       {item.name}
                     </SelectItem>
@@ -161,15 +166,21 @@ export function GoalManager({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="goal-hours">Meta em horas</FieldLabel>
+              <FieldLabel htmlFor="goal-hours">Meta em horas por dia</FieldLabel>
               <Input
                 id="goal-hours"
                 inputMode="decimal"
                 value={hours}
                 onChange={(event) => setHours(event.target.value)}
-                placeholder="Ex.: 160"
+                placeholder="Ex.: 6"
                 aria-invalid={hours.length > 0 && invalidHours}
               />
+              {monthlyEquivalentSeconds !== null ? (
+                <FieldDescription>
+                  Equivale a {formatHoursMinutes(monthlyEquivalentSeconds)} no
+                  mês de vigência selecionado ({referenceMonthDays} dias).
+                </FieldDescription>
+              ) : null}
             </Field>
             <Field>
               <FieldLabel htmlFor="goal-start">Início</FieldLabel>
@@ -225,7 +236,7 @@ export function GoalManager({
         <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 border-b px-4 py-3 text-xs text-muted-foreground">
           <span>Meta</span>
           <span>Destinatário</span>
-          <span>Horas</span>
+          <span>Horas por dia</span>
           <span>Status</span>
         </div>
         {goals.length ? (
@@ -243,51 +254,61 @@ export function GoalManager({
                 </small>
               </span>
               <span className="max-w-40 truncate">
-                {goal.targetUser?.name ??
-                  goal.targetGroup?.name ??
-                  "Destinatário indisponível"}
+                {goal.targetUser.name}
               </span>
               <span className="tabular-nums">
                 {formatHoursMinutes(goal.targetSeconds)}
               </span>
-              {canManage && goal.active ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={pending}
-                  onClick={() => {
-                    startTransition(async () => {
-                      try {
-                        const updated = await apiRequest<Goal>(
-                          `/api/v1/gestec-help-desk/goals/${goal.id}`,
-                          {
-                            method: "PATCH",
-                            body: JSON.stringify({ active: false }),
-                          },
-                        );
-                        setGoals((current) =>
-                          current.map((item) =>
-                            item.id === updated.id ? updated : item,
-                          ),
-                        );
-                        toast.success("Meta desativada.");
-                      } catch (error) {
-                        toast.error(
-                          error instanceof Error
-                            ? error.message
-                            : "Não foi possível desativar a meta.",
-                        );
-                      }
-                    });
-                  }}
-                >
-                  Desativar
-                </Button>
-              ) : (
-                <span className="text-sm text-muted-foreground">
-                  {goal.active ? "Ativa" : "Inativa"}
-                </span>
-              )}
+              <div className="flex items-center justify-end gap-2">
+                {canManage && goal.active ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => {
+                      startTransition(async () => {
+                        try {
+                          const updated = await apiRequest<Goal>(
+                            `/api/v1/gestec-help-desk/goals/${goal.id}`,
+                            {
+                              method: "PATCH",
+                              body: JSON.stringify({ active: false }),
+                            },
+                          );
+                          setGoals((current) =>
+                            current.map((item) =>
+                              item.id === updated.id ? updated : item,
+                            ),
+                          );
+                          toast.success("Meta desativada.");
+                        } catch (error) {
+                          toast.error(
+                            error instanceof Error
+                              ? error.message
+                              : "Não foi possível desativar a meta.",
+                          );
+                        }
+                      });
+                    }}
+                  >
+                    Desativar
+                  </Button>
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    {goal.active ? "Ativa" : "Inativa"}
+                  </span>
+                )}
+                {canManage ? (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={pending}
+                    onClick={() => setDeleting(goal)}
+                  >
+                    Excluir
+                  </Button>
+                ) : null}
+              </div>
             </div>
           ))
         ) : (
@@ -296,6 +317,20 @@ export function GoalManager({
           </p>
         )}
       </section>
+      <ConfirmDeleteDialog
+        open={Boolean(deleting)}
+        title="Excluir meta"
+        description={
+          deleting
+            ? `Excluir “${deleting.title}” definitivamente? Esta ação não pode ser desfeita. Para preservar o histórico, use Desativar.`
+            : ""
+        }
+        pending={pending}
+        onOpenChange={(open) => {
+          if (!open) setDeleting(null);
+        }}
+        onConfirm={deleteGoal}
+      />
     </div>
   );
 }
