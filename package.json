@@ -20,6 +20,7 @@
     "db:deploy": "prisma migrate deploy",
     "db:seed": "node prisma/seed.mjs",
     "db:inspect": "node scripts/inspect-database.mjs",
+    "db:restore-cost-centers": "node scripts/restore-cost-centers.mjs",
     "db:reset-local-users": "node scripts/reset-local-users.mjs",
     "zeev:tunnel": "node scripts/zeev-tunnel.mjs",
     "check": "npm run lint && npm run typecheck && npm run test && npm run build"
