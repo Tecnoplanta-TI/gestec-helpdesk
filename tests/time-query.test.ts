@@ -94,10 +94,13 @@ describe("filtros e totais de Meu Tempo", () => {
 });
 
 describe("metas da Jornada", () => {
-  it("calcula a meta mensal em dias úteis de 6 horas", () => {
-    expect(monthlyGoalSeconds(new Date("2026-09-03T12:00:00"))).toBe(
-      22 * DAILY_GOAL_SECONDS,
-    );
+  it("calcula a meta mensal pelos dias corridos de cada mês", () => {
+    expect(
+      monthlyGoalSeconds(8 * 60 * 60, new Date("2026-09-03T12:00:00")),
+    ).toBe(30 * 8 * 60 * 60);
+    expect(
+      monthlyGoalSeconds(6 * 60 * 60, new Date("2026-02-03T12:00:00")),
+    ).toBe(28 * DAILY_GOAL_SECONDS);
     expect(goalProgressPercent(10800, DAILY_GOAL_SECONDS)).toBe(50);
   });
 

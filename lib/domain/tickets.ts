@@ -12,6 +12,7 @@ import {
   isRealZeevApiEnabled,
   zeevProcessTasks,
 } from "@/lib/domain/zeev-client";
+import { isZeevSyncEnabled } from "@/lib/features/zeev";
 import { ApiError } from "@/lib/http/api-error";
 import { addTicketHistory } from "@/lib/domain/ticket-history";
 import { prisma } from "@/lib/prisma";
@@ -1117,6 +1118,9 @@ export async function retryTicketZeevSync(input: {
 }
 
 export async function dispatchPendingZeevSync(idempotencyKey: string) {
+  if (!isZeevSyncEnabled()) {
+    return prisma.syncExecution.findUnique({ where: { idempotencyKey } });
+  }
   const processingStartedAt = new Date();
   const staleBefore = new Date(processingStartedAt.getTime() - 120_000);
   const claimed = await prisma.syncExecution.updateMany({

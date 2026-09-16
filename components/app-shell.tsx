@@ -34,6 +34,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { hasPermission, type Permission } from "@/lib/auth/permissions";
+import { isJornadaOnlyModeEnabled } from "@/lib/features/jornada-only";
 
 const navigation: Array<{
   href: string;
@@ -100,6 +101,11 @@ const navigation: Array<{
   },
 ];
 
+const jornadaOnlyAvailableRoutes = new Set([
+  "/gestec_help_desk/jornada",
+  "/gestec_help_desk/relatorios",
+]);
+
 export function AppShell({
   children,
   user,
@@ -108,6 +114,7 @@ export function AppShell({
   user: { name: string; email: string; role: UserRole };
 }) {
   const pathname = usePathname();
+  const jornadaOnlyMode = isJornadaOnlyModeEnabled();
   const initials = user.name
     .split(" ")
     .slice(0, 2)
@@ -145,25 +152,52 @@ export function AppShell({
                 <SidebarMenu>
                   {visibleNavigation
                     .filter((item) => item.group === group)
-                    .map((item) => (
-                      <SidebarMenuItem key={item.href}>
-                        <SidebarMenuButton
-                          render={<Link href={item.href} prefetch={true} />}
-                          isActive={
-                            item.href === "/gestec_help_desk/tickets"
-                              ? pathname === item.href ||
-                                pathname.startsWith(`${item.href}/`)
-                              : pathname.startsWith(item.href)
-                          }
-                          tooltip={item.label}
-                        >
-                          <>
+                    .map((item) => {
+                      const available =
+                        !jornadaOnlyMode ||
+                        jornadaOnlyAvailableRoutes.has(item.href) ||
+                        (item.permission === "admin:manage" &&
+                          hasPermission(user.role, "admin:manage"));
+
+                      return (
+                        <SidebarMenuItem key={item.href}>
+                          <SidebarMenuButton
+                            render={
+                              available ? (
+                                <Link href={item.href} prefetch={true} />
+                              ) : (
+                                <span />
+                              )
+                            }
+                            aria-disabled={!available || undefined}
+                            isActive={
+                              available &&
+                              (item.href === "/gestec_help_desk/tickets"
+                                ? pathname === item.href ||
+                                  pathname.startsWith(`${item.href}/`)
+                                : pathname.startsWith(item.href))
+                            }
+                            tooltip={
+                              available
+                                ? item.label
+                                : `${item.label} — indisponível nesta fase`
+                            }
+                            className={
+                              available
+                                ? undefined
+                                : "cursor-not-allowed text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
+                            }
+                          >
                             <HugeiconsIcon icon={item.icon} strokeWidth={1.8} />
-                            <span>{item.label}</span>
-                          </>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
+                            <span
+                              className={available ? undefined : "line-through"}
+                            >
+                              {item.label}
+                            </span>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
@@ -181,6 +215,11 @@ export function AppShell({
               </p>
             </div>
           </div>
+          <form action="/auth/sign-out" method="post" className="px-2 pb-2 group-data-[collapsible=icon]:hidden">
+            <button className="text-xs text-muted-foreground hover:text-foreground" type="submit">
+              Sair da conta
+            </button>
+          </form>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

@@ -46,6 +46,11 @@ enum TimeEntryStatus {
   VOIDED
 }
 
+enum GoalPeriod {
+  DAILY
+  MONTHLY
+}
+
 enum NotificationPriority {
   LOW
   NORMAL
@@ -90,6 +95,7 @@ enum SyncStatus {
 
 model UserRef {
   id         String   @id @db.Uuid
+  authUserId String?  @unique @db.Uuid
   externalId String   @unique
   name       String
   email      String   @unique
@@ -207,7 +213,6 @@ model UserGroup {
 
   manager   UserRef?          @relation("UserGroupManager", fields: [managerId], references: [id], onDelete: SetNull)
   members   UserGroupMember[]
-  timeGoals TimeGoal[]
 
   @@index([active, name])
   @@index([managerId, active])
@@ -229,26 +234,25 @@ model TimeGoal {
   id              String    @id @default(uuid()) @db.Uuid
   title           String
   targetSeconds   Int
+  period          GoalPeriod @default(DAILY)
   startsOn        DateTime  @db.Date
   endsOn          DateTime? @db.Date
   permanent       Boolean   @default(false)
   active          Boolean   @default(true)
-  targetUserId    String?   @db.Uuid
-  targetGroupId   String?   @db.Uuid
+  targetUserId    String    @db.Uuid
   manualProjectId String?   @db.Uuid
   costCenterId    String?   @db.Uuid
   createdById     String    @db.Uuid
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  targetUser  UserRef?       @relation("TimeGoalUser", fields: [targetUserId], references: [id], onDelete: Cascade)
-  targetGroup UserGroup?     @relation(fields: [targetGroupId], references: [id], onDelete: Cascade)
+  targetUser  UserRef        @relation("TimeGoalUser", fields: [targetUserId], references: [id], onDelete: Cascade)
   project     ManualProject? @relation(fields: [manualProjectId], references: [id], onDelete: SetNull)
   client      CostCenter?    @relation(fields: [costCenterId], references: [id], onDelete: SetNull)
   createdBy   UserRef        @relation("TimeGoalCreator", fields: [createdById], references: [id], onDelete: Restrict)
 
   @@index([targetUserId, active, startsOn, endsOn])
-  @@index([targetGroupId, active, startsOn, endsOn])
+  @@index([targetUserId, period, active, startsOn, endsOn])
   @@index([manualProjectId, costCenterId])
 }
 

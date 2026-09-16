@@ -1,0 +1,32 @@
+services:
+  gestec-helpdesk:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_HELP_DESK_JORNADA_ONLY: ${NEXT_PUBLIC_HELP_DESK_JORNADA_ONLY:-true}
+    container_name: gestec-helpdesk
+    env_file:
+      - .env.production
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      HOSTNAME: 0.0.0.0
+      ATTACHMENT_ROOT: /app/storage/attachments
+    ports:
+      - "127.0.0.1:${GESTEC_APP_PORT:-3000}:3000"
+    volumes:
+      - ${GESTEC_STORAGE_DIR:-./storage}:/app/storage
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/api/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s

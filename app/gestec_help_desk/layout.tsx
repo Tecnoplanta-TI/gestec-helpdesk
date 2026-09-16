@@ -1,5 +1,8 @@
 import { AppShell } from "@/components/app-shell";
 import { getGestecSession } from "@/lib/auth/session";
+import { ApiError } from "@/lib/http/api-error";
+import { redirect } from "next/navigation";
+import { isZeevSyncEnabled } from "@/lib/features/zeev";
 
 // Every page in this segment depends on the request-scoped Gestec identity.
 // Keeping the segment dynamic prevents redirect-only child pages from being
@@ -11,8 +14,16 @@ export default async function HelpDeskLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getGestecSession();
-  if (process.env.NODE_ENV !== "test") {
+  let session;
+  try {
+    session = await getGestecSession();
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 401) {
+      redirect("/login");
+    }
+    throw error;
+  }
+  if (process.env.NODE_ENV !== "test" && isZeevSyncEnabled()) {
     const { startZeevSyncWorker } = await import("@/lib/jobs/zeev-sync-queue");
     // The application remains available if the queue is temporarily down.
     // Outbound executions are durable in PostgreSQL and are picked up from the

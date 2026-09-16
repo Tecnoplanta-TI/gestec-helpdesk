@@ -6,32 +6,14 @@ import { timeGoalSchema } from "@/lib/domain/schemas";
 import { ApiError, errorResponse, readJson } from "@/lib/http/api-error";
 import { prisma } from "@/lib/prisma";
 
-async function permittedGroupIds(userId: string, isAdmin: boolean) {
-  if (isAdmin) return undefined;
-  const groups = await prisma.userGroup.findMany({
-    where: { managerId: userId, active: true },
-    select: { id: true },
-  });
-  return groups.map((group) => group.id);
-}
-
 export async function GET() {
   try {
     const session = await requirePermission("goals:view");
     const isAdmin = hasPermission(session.role, "admin:manage");
-    const allowedGroups = await permittedGroupIds(session.userId, isAdmin);
     const goals = await prisma.timeGoal.findMany({
-      where: isAdmin
-        ? {}
-        : {
-            OR: [
-              { targetUserId: session.userId },
-              { targetGroupId: { in: allowedGroups } },
-            ],
-          },
+      where: isAdmin ? {} : { targetUserId: session.userId },
       include: {
         targetUser: { select: { id: true, name: true } },
-        targetGroup: { select: { id: true, name: true } },
         project: { select: { name: true } },
         client: { select: { name: true } },
       },
@@ -47,15 +29,15 @@ export async function POST(request: Request) {
   try {
     const session = await requirePermission("goals:manage");
     const input = timeGoalSchema.parse(await readJson(request));
-    const isAdmin = hasPermission(session.role, "admin:manage");
-    if (!isAdmin && input.targetUserId !== session.userId) {
-      const allowedGroups = await permittedGroupIds(session.userId, false);
-      if (!input.targetGroupId || !allowedGroups?.includes(input.targetGroupId))
-        throw new ApiError(
-          403,
-          "GOAL_FORBIDDEN",
-          "Você só pode definir metas para você ou seus grupos.",
-        );
+    if (
+      !hasPermission(session.role, "admin:manage") &&
+      input.targetUserId !== session.userId
+    ) {
+      throw new ApiError(
+        403,
+        "GOAL_FORBIDDEN",
+        "Você só pode definir metas para você.",
+      );
     }
     const goal = await prisma.$transaction(async (tx) => {
       const created = await tx.timeGoal.create({
@@ -67,21 +49,12 @@ export async function POST(request: Request) {
         },
         include: {
           targetUser: { select: { id: true, name: true } },
-          targetGroup: { select: { id: true, name: true } },
           project: { select: { name: true } },
           client: { select: { name: true } },
         },
       });
-      const recipientIds = input.targetUserId
-        ? [input.targetUserId]
-        : (
-            await tx.userGroupMember.findMany({
-              where: { userGroupId: input.targetGroupId! },
-              select: { userId: true },
-            })
-          ).map((member) => member.userId);
       await Promise.all(
-        recipientIds.map((recipientId) =>
+        [input.targetUserId].map((recipientId) =>
           createNotification(
             {
               recipientId,

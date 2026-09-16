@@ -1,11 +1,7 @@
 export async function register() {
-  if (
-    process.env.NEXT_RUNTIME !== "nodejs" ||
-    process.env.NODE_ENV === "test"
-  ) {
-    return;
-  }
-
-  // pg-boss is initialized from the authenticated module layout. Keeping it
-  // outside this graph avoids bundling `pg` for the Edge instrumentation build.
+  // Jornada is the only feature enabled for this release. Intentionally do
+  // not import the Zeev worker here: instrumentation is bundled for more than
+  // one runtime, and loading pg-boss would also pull Node-only database code
+  // into the client build.
+  return;
 }

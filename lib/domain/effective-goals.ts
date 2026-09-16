@@ -1,9 +1,10 @@
 import "server-only";
 
+import { GoalPeriod } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { selectEffectiveGoalSeconds } from "@/lib/domain/time-goals";
+import { selectEffectiveDailyGoalSeconds } from "@/lib/domain/time-goals";
 
-export async function effectiveGoalSecondsByUser(
+export async function effectiveDailyGoalSecondsByUser(
   userIds: string[],
   at: Date,
   fallbackSeconds: number,
@@ -16,35 +17,24 @@ export async function effectiveGoalSecondsByUser(
   const goals = await prisma.timeGoal.findMany({
     where: {
       active: true,
+      period: GoalPeriod.DAILY,
       startsOn: { lte: dateOnly },
       AND: [
         {
           OR: [{ endsOn: null }, { endsOn: { gte: dateOnly } }],
         },
       ],
-      OR: [
-        { targetUserId: { in: uniqueUserIds } },
-        {
-          targetGroup: {
-            active: true,
-            members: { some: { userId: { in: uniqueUserIds } } },
-          },
-        },
-      ],
+      targetUserId: { in: uniqueUserIds },
     },
     select: {
       targetSeconds: true,
       targetUserId: true,
-      targetGroup: {
-        select: {
-          members: {
-            where: { userId: { in: uniqueUserIds } },
-            select: { userId: true },
-          },
-        },
-      },
     },
     orderBy: [{ startsOn: "desc" }, { createdAt: "desc" }],
   });
-  return selectEffectiveGoalSeconds(uniqueUserIds, goals, fallbackSeconds);
+  return selectEffectiveDailyGoalSeconds(
+    uniqueUserIds,
+    goals,
+    fallbackSeconds,
+  );
 }

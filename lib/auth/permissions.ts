@@ -55,6 +55,8 @@ const ROLE_PERMISSIONS: Record<UserRole, ReadonlySet<Permission>> = {
     "time:view",
     "time:write",
     "assets:view",
+    "reports:view",
+    "reports:export",
     "notifications:view",
     "goals:view",
   ]),

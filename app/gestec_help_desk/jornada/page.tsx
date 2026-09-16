@@ -3,6 +3,8 @@ import { ptBR } from "date-fns/locale/pt-BR";
 
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
+import { effectiveDailyGoalSecondsByUser } from "@/lib/domain/effective-goals";
+import { DAILY_GOAL_SECONDS } from "@/lib/domain/time-goals";
 import { listProjects } from "@/lib/domain/projects";
 import {
   composeProjectId,
@@ -126,6 +128,13 @@ export default async function JornadaPage({
     ...new Set(recentRows.map((row) => composeProjectId(row)).filter(Boolean)),
   ].slice(0, 8);
   const weekTotals = summarizeTimeEntries(entries);
+  const dailyGoalSeconds = (
+    await effectiveDailyGoalSecondsByUser(
+      [session.userId],
+      now,
+      DAILY_GOAL_SECONDS,
+    )
+  ).get(session.userId) ?? DAILY_GOAL_SECONDS;
   const weekLabel = `${format(filters.weekStart, "d MMM", { locale: ptBR })} – ${format(addDays(filters.weekEnd, -1), "d MMM yyyy", { locale: ptBR })}`;
   const exportParams = new URLSearchParams({
     from: filters.weekStart.toISOString(),
@@ -157,6 +166,7 @@ export default async function JornadaPage({
         nonBillable: weekTotals.nonBillable,
         byProject: weekTotals.byProject,
       }}
+      dailyGoalSeconds={dailyGoalSeconds}
       filters={{
         from: formatWeekParam(filters.weekStart),
         project: filters.projectId ?? "",

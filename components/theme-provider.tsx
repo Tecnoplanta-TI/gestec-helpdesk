@@ -47,7 +47,10 @@ function ThemeHotkey() {
         return;
       }
 
-      if (event.key.toLowerCase() !== "d") {
+      // Some browser integrations can dispatch a keyboard-like event without
+      // a `key`. Ignore it instead of breaking the current page.
+      const key = typeof event.key === "string" ? event.key.toLowerCase() : "";
+      if (key !== "d") {
         return;
       }
 

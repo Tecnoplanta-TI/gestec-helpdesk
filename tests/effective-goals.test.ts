@@ -1,21 +1,19 @@
 import { describe, expect, it } from "vitest";
 
-import { selectEffectiveGoalSeconds } from "@/lib/domain/time-goals";
+import { selectEffectiveDailyGoalSeconds } from "@/lib/domain/time-goals";
 
 describe("effective goals", () => {
-  it("uses an individual goal before a group goal", () => {
-    const result = selectEffectiveGoalSeconds(
+  it("uses the newest individual goal", () => {
+    const result = selectEffectiveDailyGoalSeconds(
       ["user-1"],
       [
         {
           targetSeconds: 100,
           targetUserId: "user-1",
-          targetGroup: null,
         },
         {
           targetSeconds: 200,
-          targetUserId: null,
-          targetGroup: { members: [{ userId: "user-1" }] },
+          targetUserId: "user-1",
         },
       ],
       300,
@@ -23,24 +21,22 @@ describe("effective goals", () => {
     expect(result.get("user-1")).toBe(100);
   });
 
-  it("uses the newest matching group goal and then the fallback", () => {
-    const result = selectEffectiveGoalSeconds(
-      ["group-member", "without-goal"],
+  it("uses the fallback for a user without an individual goal", () => {
+    const result = selectEffectiveDailyGoalSeconds(
+      ["user-with-goal", "without-goal"],
       [
         {
           targetSeconds: 200,
-          targetUserId: null,
-          targetGroup: { members: [{ userId: "group-member" }] },
+          targetUserId: "user-with-goal",
         },
         {
           targetSeconds: 150,
-          targetUserId: null,
-          targetGroup: { members: [{ userId: "group-member" }] },
+          targetUserId: "user-with-goal",
         },
       ],
       300,
     );
-    expect(result.get("group-member")).toBe(200);
+    expect(result.get("user-with-goal")).toBe(200);
     expect(result.get("without-goal")).toBe(300);
   });
 });
