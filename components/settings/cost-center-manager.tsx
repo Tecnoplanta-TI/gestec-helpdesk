@@ -154,9 +154,7 @@ export function CostCenterManager({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Clientes
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
           <p className="text-sm text-muted-foreground">
             Cadastre os clientes e seus centros de custo. Projetos Semear são
             administrados separadamente.
@@ -262,7 +260,7 @@ export function CostCenterManager({
                 id="cc-code"
                 value={code}
                 onChange={(event) => setCode(event.target.value)}
-                placeholder="Ex.: FIN"
+                placeholder="Ex.: 65"
               />
             </Field>
             <Field>
@@ -271,7 +269,7 @@ export function CostCenterManager({
                 id="cc-name"
                 value={name}
                 onChange={(event) => setName(event.target.value)}
-                placeholder="Ex.: Financeiro"
+                placeholder="Ex.: Tecnologia da Informação"
               />
             </Field>
           </FieldGroup>

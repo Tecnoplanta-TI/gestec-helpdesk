@@ -68,8 +68,8 @@ export function CreateCostCenterDialog({
         <DialogHeader>
           <DialogTitle>Criar centro de custo</DialogTitle>
           <DialogDescription>
-            O código precisa ser único. Centros de custo são usados nos
-            tickets; Projetos Semear são cadastrados separadamente.
+            O código precisa ser único. Centros de custo são usados nos tickets;
+            Projetos Semear são cadastrados separadamente.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>
@@ -79,7 +79,7 @@ export function CreateCostCenterDialog({
               id="admin-cc-code"
               value={code}
               onChange={(event) => setCode(event.target.value)}
-              placeholder="Ex.: FIN"
+              placeholder="Ex.: 65"
             />
           </Field>
           <Field>
@@ -88,7 +88,7 @@ export function CreateCostCenterDialog({
               id="admin-cc-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
-              placeholder="Ex.: Financeiro"
+              placeholder="Ex.: Tecnologia da Informação"
             />
           </Field>
         </FieldGroup>

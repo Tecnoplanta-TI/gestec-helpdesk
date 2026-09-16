@@ -134,29 +134,68 @@ export async function getProjectAny(
   };
 }
 
+function compareCostCenterCode(left: string, right: string) {
+  const leftCode = Number(left);
+  const rightCode = Number(right);
+  if (
+    Number.isFinite(leftCode) &&
+    Number.isFinite(rightCode) &&
+    leftCode !== rightCode
+  ) {
+    return leftCode - rightCode;
+  }
+  return left.localeCompare(right, "pt-BR", { numeric: true });
+}
+
 export async function listProjects(
   query?: string,
   options?: { includePrivateManual?: boolean },
 ) {
   const search = query?.trim();
-  const manualProjects = await prisma.manualProject.findMany({
-    where: {
-      active: true,
-      ...(options?.includePrivateManual ? {} : { availableToAll: true }),
-      ...(search
-        ? { name: { contains: search, mode: "insensitive" as const } }
-        : {}),
-    },
-    select: { id: true, name: true, code: true, billableByDefault: true },
-    orderBy: { name: "asc" },
-  });
+  const nameOrCode = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" as const } },
+          { code: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
 
-  return manualProjects.map((project) => ({
+  const [costCenters, manualProjects] = await Promise.all([
+    prisma.costCenter.findMany({
+      where: { active: true, ...nameOrCode },
+      select: { id: true, name: true, code: true },
+    }),
+    prisma.manualProject.findMany({
+      where: {
+        active: true,
+        ...(options?.includePrivateManual ? {} : { availableToAll: true }),
+        ...nameOrCode,
+      },
+      select: { id: true, name: true, code: true, billableByDefault: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
+  const centers = costCenters
+    .map((costCenter) => ({
+      id: `cost-center:${costCenter.id}`,
+      kind: "cost-center" as const,
+      name: costCenter.name,
+      code: costCenter.code,
+      billableByDefault: true,
+    }))
+    .sort((left, right) => compareCostCenterCode(left.code, right.code));
+
+  const manuals = manualProjects.map((project) => ({
     id: `manual:${project.id}`,
+    kind: "manual" as const,
     name: project.name,
     code: project.code,
     billableByDefault: project.billableByDefault,
   }));
+
+  return [...centers, ...manuals];
 }
 
 export async function listProjectCatalog(options?: {

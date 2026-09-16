@@ -108,7 +108,7 @@ export function JornadaFiltersSheet({
                 recentProjectIds={recentProjectIds}
                 value={draft.project}
                 allowClear
-                placeholder="Todos os projetos"
+                placeholder="Todos os centros de custo ou projetos"
                 onChange={(project) =>
                   setDraft((current) => ({ ...current, project }))
                 }

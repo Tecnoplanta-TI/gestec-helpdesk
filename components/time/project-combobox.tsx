@@ -22,16 +22,30 @@ import { cn } from "@/lib/utils";
 
 export type TimeProject = {
   id: string;
+  kind?: "cost-center" | "manual";
   name: string;
   code: string | null;
   billableByDefault: boolean;
 };
 
+function projectLabel(project: TimeProject) {
+  if (project.kind === "cost-center" && project.code) {
+    return `${project.code} · ${project.name}`;
+  }
+  return project.code ? `${project.name} · ${project.code}` : project.name;
+}
+
+function isCostCenter(project: TimeProject) {
+  return (
+    project.kind === "cost-center" || project.id.startsWith("cost-center:")
+  );
+}
+
 export function ProjectCombobox({
   projects,
   recentProjectIds,
   value,
-  placeholder = "Selecionar projeto",
+  placeholder = "Selecionar centro de custo ou projeto",
   disabled = false,
   allowClear = false,
   onChange,
@@ -78,9 +92,7 @@ export function ProjectCombobox({
         }
       >
         <span className={cn("truncate", !selected && "text-muted-foreground")}>
-          {selected
-            ? `${selected.name}${selected.code ? ` · ${selected.code}` : ""}`
-            : placeholder}
+          {selected ? projectLabel(selected) : placeholder}
         </span>
         <HugeiconsIcon icon={ArrowDown01Icon} className="size-4 opacity-60" />
       </PopoverTrigger>
@@ -88,7 +100,9 @@ export function ProjectCombobox({
         <Command>
           <CommandInput placeholder="Buscar por nome ou código" />
           <CommandList>
-            <CommandEmpty>Nenhum projeto encontrado.</CommandEmpty>
+            <CommandEmpty>
+              Nenhum centro de custo ou projeto encontrado.
+            </CommandEmpty>
             {allowClear && value ? (
               <CommandGroup>
                 <CommandItem value="limpar-filtro" onSelect={() => select("")}>
@@ -105,25 +119,41 @@ export function ProjectCombobox({
                     data-checked={value === project.id || undefined}
                     onSelect={() => select(project.id)}
                   >
-                    {project.name}
-                    {project.code ? ` · ${project.code}` : ""}
+                    {projectLabel(project)}
                   </CommandItem>
                 ))}
               </CommandGroup>
             ) : null}
-            <CommandGroup heading="Todos os projetos">
-              {(recent.length > 0 ? remaining : projects).map((project) => (
-                <CommandItem
-                  key={project.id}
-                  value={`${project.name} ${project.code ?? ""} ${project.id}`}
-                  data-checked={value === project.id || undefined}
-                  onSelect={() => select(project.id)}
+            {(["cost-center", "manual"] as const).map((kind) => {
+              const items = (recent.length > 0 ? remaining : projects).filter(
+                (project) =>
+                  kind === "cost-center"
+                    ? isCostCenter(project)
+                    : !isCostCenter(project),
+              );
+              if (!items.length) return null;
+              return (
+                <CommandGroup
+                  key={kind}
+                  heading={
+                    kind === "cost-center"
+                      ? "Centros de custo"
+                      : "Projetos Semear"
+                  }
                 >
-                  {project.name}
-                  {project.code ? ` · ${project.code}` : ""}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+                  {items.map((project) => (
+                    <CommandItem
+                      key={project.id}
+                      value={`${project.name} ${project.code ?? ""} ${project.id}`}
+                      data-checked={value === project.id || undefined}
+                      onSelect={() => select(project.id)}
+                    >
+                      {projectLabel(project)}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              );
+            })}
           </CommandList>
         </Command>
       </PopoverContent>
