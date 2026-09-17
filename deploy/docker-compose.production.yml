@@ -9,6 +9,8 @@ services:
         # while Next.js builds the image, not only when the container starts.
         NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:?Configure NEXT_PUBLIC_SUPABASE_URL}
         NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:?Configure NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY}
+        # A Next.js production build needs more memory than the running app.
+        BUILD_NODE_HEAP_MB: ${GESTEC_BUILD_NODE_HEAP_MB:-1536}
     container_name: gestec-helpdesk
     env_file:
       - .env.production

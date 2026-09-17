@@ -114,6 +114,21 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
    curl --fail http://127.0.0.1:3000/api/health
    ```
 
+   Em uma VPS com 1 GB de memória ou menos, crie antes um arquivo de swap de
+   2 GB. O build do Next.js requer mais memória que o processo em produção:
+
+   ```bash
+   fallocate -l 2G /swapfile
+   chmod 600 /swapfile
+   mkswap /swapfile
+   swapon /swapfile
+   echo '/swapfile none swap sw 0 0' >> /etc/fstab
+   free -h
+   ```
+
+   O arquivo `deploy/.env.production` configura
+   `GESTEC_BUILD_NODE_HEAP_MB=1536`, usado somente para montar a imagem.
+
 7. Configure Nginx com base em `deploy/nginx/helpdesk.conf.example`, substitua
    o domínio e habilite HTTPS antes de expor o endereço. O container fica
    ligado apenas a `127.0.0.1`; Nginx é o único ponto público.
