@@ -22,7 +22,12 @@ executa `db:seed` em nenhum ambiente de produção.
    Como a variável é pública e incorporada no build, alterá-la exige
    reconstruir a imagem.
 
-3. Use a rota `GET /api/health` para verificar se a aplicação e o PostgreSQL
+3. `NEXT_PUBLIC_SUPABASE_URL`,
+   `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` e
+   `NEXT_PUBLIC_HELP_DESK_JORNADA_ONLY` são incorporadas ao pacote do navegador
+   durante o build. Sempre que qualquer uma delas for alterada, reconstrua a
+   imagem com `docker compose ... up -d --build`.
+4. Use a rota `GET /api/health` para verificar se a aplicação e o PostgreSQL
    estão disponíveis. Ela não expõe dados, tokens nem detalhes de conexão.
 
 ## 2. Limpar o banco local com segurança
@@ -100,7 +105,8 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
 5. Garanta uma pasta persistente, por exemplo
    `/var/lib/gestec-helpdesk/storage`, para anexos. A imagem nunca armazena
    anexos somente na camada temporária do container.
-6. Construa e inicie o serviço:
+6. Construa e inicie o serviço. O Compose interrompe o build caso as duas
+   variáveis públicas do Supabase não tenham sido preenchidas:
 
    ```bash
    docker compose --env-file deploy/.env.production -f deploy/docker-compose.production.yml up -d --build
