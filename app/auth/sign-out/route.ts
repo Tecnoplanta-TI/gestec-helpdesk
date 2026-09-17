@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { publicUrl } from "@/lib/http/public-url";
 import { createSupabaseServerClient, isSupabaseAuthEnabled } from "@/lib/supabase/server";
 
 export async function POST(request: NextRequest) {
@@ -7,5 +8,5 @@ export async function POST(request: NextRequest) {
     const supabase = await createSupabaseServerClient();
     await supabase.auth.signOut();
   }
-  return NextResponse.redirect(new URL("/login", request.url), 303);
+  return NextResponse.redirect(publicUrl(request, "/login"), 303);
 }

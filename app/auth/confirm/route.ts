@@ -5,9 +5,10 @@ import {
   getSupabaseEnvironment,
   isSupabaseAuthEnabled,
 } from "@/lib/supabase/server";
+import { publicUrl } from "@/lib/http/public-url";
 
 function loginRedirect(request: NextRequest) {
-  return NextResponse.redirect(new URL("/login?invite=invalid", request.url));
+  return NextResponse.redirect(publicUrl(request, "/login?invite=invalid"));
 }
 
 export async function GET(request: NextRequest) {
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
   const code = request.nextUrl.searchParams.get("code");
   if ((!tokenHash || type !== "invite") && !code) return loginRedirect(request);
 
-  const destination = new URL("/criar-senha", request.url);
+  const destination = publicUrl(request, "/criar-senha");
   const response = NextResponse.redirect(destination);
   const { url, publishableKey } = getSupabaseEnvironment();
   const supabase = createServerClient(url, publishableKey, {
