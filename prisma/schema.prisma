@@ -1,5 +1,9 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // Builds are produced on Windows and run on the Debian VPS. Keep both
+  // engines in the standalone bundle so production does not depend on a
+  // Prisma generation step on the server.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
