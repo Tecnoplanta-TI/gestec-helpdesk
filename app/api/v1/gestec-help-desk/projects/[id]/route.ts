@@ -5,7 +5,11 @@ import {
   stripManualProjectId,
 } from "@/lib/domain/catalog-delete";
 import { normalizeProjectName } from "@/lib/domain/projects";
-import { addProjectHourlyRate, centsFromCurrency } from "@/lib/domain/project-rates";
+import {
+  addProjectHourlyRate,
+  centsFromCurrency,
+} from "@/lib/domain/project-rates";
+import { replaceProjectRateio } from "@/lib/domain/project-rateio";
 import { manualProjectUpdateSchema } from "@/lib/domain/schemas";
 import { ApiError, errorResponse, readJson } from "@/lib/http/api-error";
 import { prisma } from "@/lib/prisma";
@@ -26,26 +30,25 @@ export async function PATCH(
       const normalizedName = input.name
         ? normalizeProjectName(input.name)
         : undefined;
-      const { hourlyRate, hourlyRateEffectiveFrom, ...projectInput } = input;
-      const code = projectInput.code?.toUpperCase();
-      if (normalizedName || code) {
+      const {
+        hourlyRate,
+        hourlyRateEffectiveFrom,
+        allocations,
+        ...projectInput
+      } = input;
+      if (normalizedName) {
         const existing = await tx.manualProject.findFirst({
           where: {
             id: { not: id },
-            OR: [
-              ...(normalizedName ? [{ normalizedName }] : []),
-              ...(code ? [{ code }] : []),
-            ],
+            normalizedName,
           },
-          select: { code: true },
+          select: { id: true },
         });
         if (existing) {
           throw new ApiError(
             409,
             "PROJECT_ALREADY_EXISTS",
-            existing.code === code
-              ? "Já existe um projeto com este código."
-              : "Já existe um projeto com este nome.",
+            "Já existe um projeto com este nome.",
           );
         }
       }
@@ -53,10 +56,12 @@ export async function PATCH(
         where: { id },
         data: {
           ...projectInput,
-          ...(code ? { code } : {}),
           ...(normalizedName ? { normalizedName } : {}),
         },
       });
+      if (allocations) {
+        await replaceProjectRateio(tx, id, allocations);
+      }
       if (hourlyRate !== undefined && hourlyRateEffectiveFrom) {
         await addProjectHourlyRate(tx, {
           manualProjectId: id,

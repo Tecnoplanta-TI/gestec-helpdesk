@@ -136,6 +136,7 @@ model CostCenter {
   timeEntries  TimeEntry[]
   activeTimers ActiveTimer[]
   timeGoals    TimeGoal[]
+  projectShares ProjectCostCenterShare[]
 
   @@index([active, name])
 }
@@ -183,8 +184,24 @@ model ManualProject {
   activeTimers ActiveTimer[]
   hourlyRates  ProjectHourlyRate[]
   timeGoals    TimeGoal[]
+  costCenterShares ProjectCostCenterShare[]
 
   @@index([active, name])
+}
+
+model ProjectCostCenterShare {
+  id              String   @id @default(uuid()) @db.Uuid
+  manualProjectId String   @db.Uuid
+  costCenterId    String   @db.Uuid
+  shareBps        Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  project    ManualProject @relation(fields: [manualProjectId], references: [id], onDelete: Cascade)
+  costCenter CostCenter    @relation(fields: [costCenterId], references: [id], onDelete: Restrict)
+
+  @@unique([manualProjectId, costCenterId])
+  @@index([costCenterId])
 }
 
 model ProjectHourlyRate {

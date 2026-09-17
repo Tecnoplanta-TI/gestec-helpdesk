@@ -231,24 +231,70 @@ export const costCenterUpdateSchema = z
 
 export const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 
-export const manualProjectSchema = z.object({
-  code: z.string().trim().regex(/^PRO-\d+$/i, "Use o formato PRO-0001."),
-  name: z.string().trim().min(2).max(160),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
-  availableToAll: z.boolean().default(true),
-  billableByDefault: z.boolean().default(false),
-  active: z.boolean().default(true),
-  hourlyRate: z.number().min(0).max(1_000_000).optional(),
-  hourlyRateEffectiveFrom: isoDateSchema.optional(),
-}).superRefine((value, context) => {
-  if ((value.hourlyRate === undefined) !== (value.hourlyRateEffectiveFrom === undefined)) {
-    context.addIssue({ code: "custom", message: "Informe o valor-hora e sua data de vigência juntos.", path: ["hourlyRate"] });
-  }
+const rateioAllocationSchema = z.object({
+  costCenterId: z.string().uuid(),
+  percent: z.number().gt(0).lte(100),
 });
+
+function refineRateioAllocations(
+  allocations: Array<{ costCenterId: string; percent: number }> | undefined,
+  context: {
+    addIssue: (issue: {
+      code: "custom";
+      message: string;
+      path: Array<string | number>;
+    }) => void;
+  },
+) {
+  if (!allocations?.length) return;
+  const ids = new Set(allocations.map((allocation) => allocation.costCenterId));
+  if (ids.size !== allocations.length) {
+    context.addIssue({
+      code: "custom",
+      message: "Não repita o mesmo centro de custo no rateio.",
+      path: ["allocations"],
+    });
+  }
+  const totalBps = allocations.reduce(
+    (sum, allocation) => sum + Math.round(allocation.percent * 100),
+    0,
+  );
+  if (totalBps !== 10_000) {
+    context.addIssue({
+      code: "custom",
+      message: "A soma do rateio deve ser 100%.",
+      path: ["allocations"],
+    });
+  }
+}
+
+export const manualProjectSchema = z
+  .object({
+    name: z.string().trim().min(2).max(160),
+    color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+    availableToAll: z.boolean().default(true),
+    billableByDefault: z.boolean().default(false),
+    active: z.boolean().default(true),
+    hourlyRate: z.number().min(0).max(1_000_000).optional(),
+    hourlyRateEffectiveFrom: isoDateSchema.optional(),
+    allocations: z.array(rateioAllocationSchema).max(20).default([]),
+  })
+  .superRefine((value, context) => {
+    if (
+      (value.hourlyRate === undefined) !==
+      (value.hourlyRateEffectiveFrom === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Informe o valor-hora e sua data de vigência juntos.",
+        path: ["hourlyRate"],
+      });
+    }
+    refineRateioAllocations(value.allocations, context);
+  });
 
 export const manualProjectUpdateSchema = z
   .object({
-    code: z.string().trim().regex(/^PRO-\d+$/i, "Use o formato PRO-0001.").optional(),
     name: z.string().trim().min(2).max(160).optional(),
     color: z
       .string()
@@ -259,11 +305,20 @@ export const manualProjectUpdateSchema = z
     active: z.boolean().optional(),
     hourlyRate: z.number().min(0).max(1_000_000).optional(),
     hourlyRateEffectiveFrom: isoDateSchema.optional(),
+    allocations: z.array(rateioAllocationSchema).max(20).optional(),
   })
   .superRefine((value, context) => {
-    if ((value.hourlyRate === undefined) !== (value.hourlyRateEffectiveFrom === undefined)) {
-      context.addIssue({ code: "custom", message: "Informe o valor-hora e sua data de vigência juntos.", path: ["hourlyRate"] });
+    if (
+      (value.hourlyRate === undefined) !==
+      (value.hourlyRateEffectiveFrom === undefined)
+    ) {
+      context.addIssue({
+        code: "custom",
+        message: "Informe o valor-hora e sua data de vigência juntos.",
+        path: ["hourlyRate"],
+      });
     }
+    refineRateioAllocations(value.allocations, context);
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Informe ao menos uma alteração.",
@@ -306,7 +361,11 @@ export const timeGoalSchema = z
       });
     }
     if (value.endsOn !== null && value.endsOn < value.startsOn) {
-      context.addIssue({ code: "custom", message: "A data final não pode ser anterior à inicial.", path: ["endsOn"] });
+      context.addIssue({
+        code: "custom",
+        message: "A data final não pode ser anterior à inicial.",
+        path: ["endsOn"],
+      });
     }
     if (value.targetSeconds > 86_400) {
       context.addIssue({

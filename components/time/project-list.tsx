@@ -16,7 +16,12 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -42,6 +47,15 @@ import {
 } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
 import { Add01Icon, SearchIcon } from "@/lib/icons";
+import { formatRateioSummary } from "@/lib/format";
+import {
+  isRateioDraftValid,
+  ProjectRateioFields,
+  rateioPayload,
+  sharesFromRateio,
+  type RateioShareDraft,
+  type RateioShareValue,
+} from "@/components/time/project-rateio-fields";
 
 export type ProjectListItem = {
   id: string;
@@ -56,6 +70,7 @@ export type ProjectListItem = {
   hourlyRateEffectiveFrom: string | Date | null;
   latestHourlyRateEffectiveFrom: string | Date | null;
   monthSeconds: number;
+  rateio: RateioShareValue[];
 };
 
 export function ProjectList({
@@ -72,7 +87,6 @@ export function ProjectList({
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [deleting, setDeleting] = useState<ProjectListItem | null>(null);
   const [form, setForm] = useState({
-    code: "",
     name: "",
     color: "#10b981",
     availableToAll: true,
@@ -81,20 +95,23 @@ export function ProjectList({
     hourlyRate: "",
     hourlyRateEffectiveFrom: currentLocalDateValue(),
   });
+  const [rateio, setRateio] = useState<RateioShareDraft[]>([]);
   const visibleProjects = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
     if (!normalized) return projects;
     return projects.filter(
       (project) =>
         project.name.toLocaleLowerCase("pt-BR").includes(normalized) ||
-        project.code?.toLocaleLowerCase("pt-BR").includes(normalized),
+        project.code?.toLocaleLowerCase("pt-BR").includes(normalized) ||
+        formatRateioSummary(project.rateio ?? [])
+          .toLocaleLowerCase("pt-BR")
+          .includes(normalized),
     );
   }, [projects, query]);
 
   function openEditor(project: ProjectListItem) {
     setEditing(project);
     setForm({
-      code: project.code ?? "",
       name: project.name,
       color: project.color ?? "#10b981",
       availableToAll: project.availableToAll,
@@ -103,6 +120,7 @@ export function ProjectList({
       hourlyRate: "",
       hourlyRateEffectiveFrom: currentLocalDateValue(),
     });
+    setRateio(sharesFromRateio(project.rateio));
   }
 
   function saveProject() {
@@ -114,13 +132,18 @@ export function ProjectList({
           {
             method: "PATCH",
             body: JSON.stringify({
-              ...form,
+              name: form.name.trim(),
+              color: form.color,
+              availableToAll: form.availableToAll,
+              billableByDefault: form.billableByDefault,
+              active: form.active,
+              allocations: rateioPayload(rateio),
               ...(form.hourlyRate.trim()
-                ? { hourlyRate: Number(form.hourlyRate.replace(",", ".")) }
-                : {
-                    hourlyRate: undefined,
-                    hourlyRateEffectiveFrom: undefined,
-                  }),
+                ? {
+                    hourlyRate: Number(form.hourlyRate.replace(",", ".")),
+                    hourlyRateEffectiveFrom: form.hourlyRateEffectiveFrom,
+                  }
+                : {}),
             }),
           },
         );
@@ -227,6 +250,11 @@ export function ProjectList({
                           {project.code}
                         </span>
                         <span>{project.name}</span>
+                        {project.rateio?.length ? (
+                          <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                            Rateio: {formatRateioSummary(project.rateio)}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatCurrencyFromCents(project.hourlyRateCents)}
@@ -288,7 +316,7 @@ export function ProjectList({
           if (!open) setEditing(null);
         }}
       >
-        <SheetContent side="right" className="sm:max-w-md">
+        <SheetContent side="right" className="sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Editar projeto</SheetTitle>
             <SheetDescription>
@@ -302,18 +330,11 @@ export function ProjectList({
           <div className="flex-1 overflow-y-auto px-6">
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="project-edit-code">Código</FieldLabel>
-                <Input
-                  id="project-edit-code"
-                  value={form.code}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      code: event.target.value.toUpperCase(),
-                    }))
-                  }
-                  placeholder="PRO-0001"
-                />
+                <FieldLabel>Código</FieldLabel>
+                <p className="text-sm font-medium">{editing?.code ?? "—"}</p>
+                <FieldDescription>
+                  O código do projeto é gerado automaticamente.
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="project-edit-name">Nome</FieldLabel>
@@ -429,6 +450,7 @@ export function ProjectList({
                   }
                 />
               </label>
+              <ProjectRateioFields shares={rateio} onChange={setRateio} />
             </FieldGroup>
           </div>
           <SheetFooter>
@@ -444,7 +466,7 @@ export function ProjectList({
               disabled={
                 pending ||
                 form.name.trim().length < 2 ||
-                !/^PRO-\d+$/i.test(form.code)
+                !isRateioDraftValid(rateio)
               }
             >
               {pending ? "Salvando…" : "Salvar"}

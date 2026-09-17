@@ -47,6 +47,15 @@ import {
   formatCurrencyFromCents,
   formatHoursMinutes,
 } from "@/lib/format";
+import { formatRateioSummary } from "@/lib/format";
+import {
+  isRateioDraftValid,
+  ProjectRateioFields,
+  rateioPayload,
+  sharesFromRateio,
+  type RateioShareDraft,
+  type RateioShareValue,
+} from "@/components/time/project-rateio-fields";
 
 export type AdminProjectItem = {
   id: string;
@@ -61,6 +70,7 @@ export type AdminProjectItem = {
   hourlyRateEffectiveFrom: string | Date | null;
   latestHourlyRateEffectiveFrom: string | Date | null;
   monthSeconds: number;
+  rateio: RateioShareValue[];
 };
 
 function nextHourlyRateEffectiveFrom(value: string | Date | null) {
@@ -88,7 +98,6 @@ export function AdminProjectManager({
   const [deleting, setDeleting] = useState<AdminProjectItem | null>(null);
   const [form, setForm] = useState({
     name: "",
-    code: "",
     color: "#10b981",
     availableToAll: true,
     billableByDefault: false,
@@ -96,12 +105,12 @@ export function AdminProjectManager({
     hourlyRate: "",
     hourlyRateEffectiveFrom: currentLocalDateValue(),
   });
+  const [rateio, setRateio] = useState<RateioShareDraft[]>([]);
 
   function openEditor(project: AdminProjectItem) {
     setEditing(project);
     setForm({
       name: project.name,
-      code: project.code ?? "",
       color: project.color ?? "#10b981",
       availableToAll: project.availableToAll,
       billableByDefault: project.billableByDefault,
@@ -111,6 +120,7 @@ export function AdminProjectManager({
         project.latestHourlyRateEffectiveFrom,
       ),
     });
+    setRateio(sharesFromRateio(project.rateio));
   }
 
   function save() {
@@ -121,12 +131,12 @@ export function AdminProjectManager({
         await apiRequest(`/api/v1/gestec-help-desk/projects/${id}`, {
           method: "PATCH",
           body: JSON.stringify({
-            code: form.code.trim().toUpperCase(),
             name: form.name.trim(),
             color: form.color,
             availableToAll: form.availableToAll,
             billableByDefault: form.billableByDefault,
             active: form.active,
+            allocations: rateioPayload(rateio),
             ...(form.hourlyRate.trim()
               ? {
                   hourlyRate: Number(form.hourlyRate.replace(",", ".")),
@@ -219,6 +229,11 @@ export function AdminProjectManager({
                       ) : null}
                       {project.name}
                     </span>
+                    {project.rateio?.length ? (
+                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                        Rateio: {formatRateioSummary(project.rateio)}
+                      </span>
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {project.code ?? "—"}
@@ -267,29 +282,22 @@ export function AdminProjectManager({
           if (!open) setEditing(null);
         }}
       >
-        <SheetContent side="right" className="sm:max-w-md">
+        <SheetContent side="right" className="sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Editar projeto</SheetTitle>
             <SheetDescription>
-              Altere o código, nome, valor-hora, vigência, visibilidade e
-              faturabilidade padrão do projeto Semear.
+              Altere o nome, valor-hora, vigência, visibilidade, faturabilidade
+              padrão e o rateio por centro de custo do projeto Semear.
             </SheetDescription>
           </SheetHeader>
           <div className="flex-1 overflow-y-auto px-6">
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="admin-project-code">Código</FieldLabel>
-                <Input
-                  id="admin-project-code"
-                  value={form.code}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      code: event.target.value.toUpperCase(),
-                    }))
-                  }
-                  placeholder="PRO-0001"
-                />
+                <FieldLabel>Código</FieldLabel>
+                <p className="text-sm font-medium">{editing?.code ?? "—"}</p>
+                <FieldDescription>
+                  O código do projeto é gerado automaticamente.
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="admin-project-name">Nome</FieldLabel>
@@ -412,6 +420,7 @@ export function AdminProjectManager({
                   }
                 />
               </Field>
+              <ProjectRateioFields shares={rateio} onChange={setRateio} />
             </FieldGroup>
           </div>
           <SheetFooter>
@@ -427,7 +436,7 @@ export function AdminProjectManager({
               disabled={
                 pending ||
                 form.name.trim().length < 2 ||
-                !/^PRO-\d+$/i.test(form.code) ||
+                !isRateioDraftValid(rateio) ||
                 (form.hourlyRate.trim().length > 0 &&
                   (!Number.isFinite(
                     Number(form.hourlyRate.replace(",", ".")),

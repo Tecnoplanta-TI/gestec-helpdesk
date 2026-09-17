@@ -227,6 +227,14 @@ export async function listProjectCatalog(options?: {
           orderBy: { effectiveFrom: "desc" },
           select: { amountCents: true, effectiveFrom: true },
         },
+        costCenterShares: {
+          orderBy: { shareBps: "desc" },
+          select: {
+            shareBps: true,
+            costCenterId: true,
+            costCenter: { select: { code: true, name: true } },
+          },
+        },
       },
       orderBy: [{ active: "desc" }, { name: "asc" }],
     }),
@@ -272,6 +280,12 @@ export async function listProjectCatalog(options?: {
         hourlyRateEffectiveFrom: currentRate?.effectiveFrom ?? null,
         latestHourlyRateEffectiveFrom: latestRate?.effectiveFrom ?? null,
         monthSeconds: monthSeconds.get(id) ?? 0,
+        rateio: project.costCenterShares.map((share) => ({
+          costCenterId: share.costCenterId,
+          code: share.costCenter.code,
+          name: share.costCenter.name,
+          shareBps: share.shareBps,
+        })),
       };
     })
     .sort((left, right) => right.monthSeconds - left.monthSeconds);

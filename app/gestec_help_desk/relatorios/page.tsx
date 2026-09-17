@@ -29,8 +29,15 @@ import {
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
 import { listProjectCatalog } from "@/lib/domain/projects";
-import { reportFilters } from "@/lib/domain/report-query";
-import { formatDuration, ticketStatusLabels } from "@/lib/format";
+import { allocateSeconds } from "@/lib/domain/project-rateio";
+import { reportTimeEntryWhere } from "@/lib/domain/report-query";
+import {
+  displayPersonName,
+  formatCatalogLabel,
+  formatDuration,
+  formatRateioSummary,
+  ticketStatusLabels,
+} from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -60,7 +67,8 @@ export default async function ReportsPage({
   const costCenterValue = scalar(params.costCenter);
   const billableValue = scalar(params.billable);
   const ticketValue = scalar(params.ticket);
-  const userValue = scalar(params.userId);
+  const requestedUser = scalar(params.userId);
+  const userValue = requestedUser || session.userId;
   const reportParams = new URLSearchParams({ from: fromValue, to: toValue });
   if (projectValue && projectValue !== "all")
     reportParams.set("manualProject", projectValue);
@@ -74,7 +82,7 @@ export default async function ReportsPage({
     from,
     to,
     where: timeWhere,
-  } = reportFilters(reportParams, databaseNow);
+  } = await reportTimeEntryWhere(reportParams, databaseNow);
   const [
     ticketsByStatus,
     hoursByBillable,
@@ -106,18 +114,100 @@ export default async function ReportsPage({
     }),
     listProjectCatalog({
       includePrivateManual: hasPermission(session.role, "time:manage"),
+      includeInactive: true,
     }),
     prisma.costCenter.findMany({
-      where: { active: true },
-      select: { id: true, code: true, name: true },
+      select: { id: true, code: true, name: true, active: true },
       orderBy: [{ code: "asc" }, { name: "asc" }],
     }),
     prisma.userRef.findMany({
-      where: { active: true },
-      select: { id: true, name: true },
+      where: {
+        OR: [
+          { active: true },
+          { id: session.userId },
+          ...(userValue && userValue !== "all" ? [{ id: userValue }] : []),
+        ],
+      },
+      select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
   ]);
+  const projectIds = [
+    ...new Set(
+      hoursByProject
+        .map((row) => row.manualProjectId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const rateioShares = projectIds.length
+    ? await prisma.projectCostCenterShare.findMany({
+        where: { manualProjectId: { in: projectIds } },
+        select: {
+          manualProjectId: true,
+          costCenterId: true,
+          shareBps: true,
+          costCenter: { select: { code: true, name: true } },
+        },
+        orderBy: { shareBps: "desc" },
+      })
+    : [];
+  const sharesByProject = new Map<
+    string,
+    Array<{
+      costCenterId: string;
+      shareBps: number;
+      code: string;
+      name: string;
+    }>
+  >();
+  for (const share of rateioShares) {
+    const current = sharesByProject.get(share.manualProjectId) ?? [];
+    current.push({
+      costCenterId: share.costCenterId,
+      shareBps: share.shareBps,
+      code: share.costCenter.code,
+      name: share.costCenter.name,
+    });
+    sharesByProject.set(share.manualProjectId, current);
+  }
+  const costCenterById = new Map(
+    costCenters.map((costCenter) => [costCenter.id, costCenter]),
+  );
+  const projectById = new Map(
+    projects.map((project) => [project.id.replace(/^manual:/, ""), project]),
+  );
+  const userLabel = (user: { id: string; name: string; email: string }) =>
+    displayPersonName(user.name, user.email);
+  const activeCostCenters = costCenters.filter(
+    (costCenter) => costCenter.active || costCenter.id === costCenterValue,
+  );
+  const costCenterLabels: Record<string, string> = {
+    all: "Todos",
+    ...Object.fromEntries(
+      activeCostCenters.map((costCenter) => [
+        costCenter.id,
+        formatCatalogLabel(costCenter.code, costCenter.name),
+      ]),
+    ),
+  };
+  const projectLabels: Record<string, string> = {
+    all: "Todos",
+    ...Object.fromEntries(
+      projects.map((project) => [
+        project.id.replace(/^manual:/, ""),
+        formatCatalogLabel(project.code, project.name),
+      ]),
+    ),
+  };
+  const billableLabels: Record<string, string> = {
+    all: "Todas",
+    billable: "Faturável",
+    "non-billable": "Não faturável",
+  };
+  const userLabels: Record<string, string> = {
+    all: "Todos os usuários",
+    ...Object.fromEntries(users.map((user) => [user.id, userLabel(user)])),
+  };
   const totalSeconds = hoursByBillable.reduce(
     (sum, row) => sum + (row._sum.durationSeconds ?? 0),
     0,
@@ -125,16 +215,88 @@ export default async function ReportsPage({
   const billableSeconds =
     hoursByBillable.find((row) => row.billable)?._sum.durationSeconds ?? 0;
   const projectTotals = hoursByProject
-    .map((row) => ({
-      key: `${row.costCenterId ?? ""}:${row.manualProjectId ?? ""}:${row.projectNameSnapshot ?? ""}`,
-      name: row.projectNameSnapshot ?? "Pendente de classificação",
-      type: row.costCenterId
-        ? "Centro de custo"
-        : row.manualProjectId
-          ? "Projeto Semear"
-          : "Sem classificação",
-      seconds: row._sum.durationSeconds ?? 0,
-    }))
+    .map((row) => {
+      const seconds = row._sum.durationSeconds ?? 0;
+      if (row.costCenterId) {
+        const costCenter = costCenterById.get(row.costCenterId);
+        return {
+          key: `cc:${row.costCenterId}`,
+          name: costCenter
+            ? formatCatalogLabel(costCenter.code, costCenter.name)
+            : (row.projectNameSnapshot ?? "Centro de custo"),
+          type: "Centro de custo",
+          rateio: "—",
+          seconds,
+        };
+      }
+      if (row.manualProjectId) {
+        const project = projectById.get(row.manualProjectId);
+        const shares = sharesByProject.get(row.manualProjectId) ?? [];
+        return {
+          key: `project:${row.manualProjectId}`,
+          name: project
+            ? formatCatalogLabel(project.code, project.name)
+            : (row.projectNameSnapshot ?? "Projeto Semear"),
+          type: "Projeto Semear",
+          rateio: shares.length ? formatRateioSummary(shares) : "Sem rateio",
+          seconds,
+        };
+      }
+      return {
+        key: `unclassified:${row.projectNameSnapshot ?? ""}`,
+        name: row.projectNameSnapshot ?? "Pendente de classificação",
+        type: "Sem classificação",
+        rateio: "—",
+        seconds,
+      };
+    })
+    .sort((left, right) => right.seconds - left.seconds);
+
+  const allocatedTotals = new Map<string, { name: string; seconds: number }>();
+  function addAllocated(key: string, name: string, seconds: number) {
+    const current = allocatedTotals.get(key);
+    if (current) {
+      current.seconds += seconds;
+      return;
+    }
+    allocatedTotals.set(key, { name, seconds });
+  }
+  for (const row of hoursByProject) {
+    const seconds = row._sum.durationSeconds ?? 0;
+    if (row.costCenterId) {
+      const costCenter = costCenterById.get(row.costCenterId);
+      addAllocated(
+        `cc:${row.costCenterId}`,
+        costCenter
+          ? formatCatalogLabel(costCenter.code, costCenter.name)
+          : (row.projectNameSnapshot ?? "Centro de custo"),
+        seconds,
+      );
+      continue;
+    }
+    if (row.manualProjectId) {
+      const shares = sharesByProject.get(row.manualProjectId) ?? [];
+      if (!shares.length) {
+        addAllocated("sem-rateio", "Projetos sem rateio", seconds);
+        continue;
+      }
+      for (const share of allocateSeconds(seconds, shares)) {
+        addAllocated(
+          `cc:${share.costCenterId}`,
+          formatCatalogLabel(share.code, share.name),
+          share.seconds,
+        );
+      }
+      continue;
+    }
+    addAllocated(
+      "unclassified",
+      row.projectNameSnapshot ?? "Pendente de classificação",
+      seconds,
+    );
+  }
+  const allocatedRows = [...allocatedTotals.entries()]
+    .map(([key, row]) => ({ key, ...row }))
     .sort((left, right) => right.seconds - left.seconds);
 
   return (
@@ -175,22 +337,18 @@ export default async function ReportsPage({
               <Select
                 name="costCenter"
                 defaultValue={costCenterValue || "all"}
-                items={Object.fromEntries([
-                  ["all", "Todos"],
-                  ...costCenters.map((costCenter) => [
-                    costCenter.id,
-                    `${costCenter.code} · ${costCenter.name}`,
-                  ]),
-                ])}
+                items={costCenterLabels}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {costCenterLabels[costCenterValue || "all"] ?? "Todos"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  {costCenters.map((costCenter) => (
+                  {activeCostCenters.map((costCenter) => (
                     <SelectItem key={costCenter.id} value={costCenter.id}>
-                      {costCenter.code} · {costCenter.name}
+                      {formatCatalogLabel(costCenter.code, costCenter.name)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -201,22 +359,21 @@ export default async function ReportsPage({
               <Select
                 name="manualProject"
                 defaultValue={projectValue || "all"}
-                items={Object.fromEntries([
-                  ["all", "Todos"],
-                  ...projects.map((project) => [
-                    project.id.slice(7),
-                    project.name,
-                  ]),
-                ])}
+                items={projectLabels}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {projectLabels[projectValue || "all"] ?? "Todos"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
                   {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id.slice(7)}>
-                      {project.code} · {project.name}
+                    <SelectItem
+                      key={project.id}
+                      value={project.id.replace(/^manual:/, "")}
+                    >
+                      {formatCatalogLabel(project.code, project.name)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -227,14 +384,12 @@ export default async function ReportsPage({
               <Select
                 name="billable"
                 defaultValue={billableValue || "all"}
-                items={{
-                  all: "Todas",
-                  billable: "Faturável",
-                  "non-billable": "Não faturável",
-                }}
+                items={billableLabels}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {billableLabels[billableValue || "all"] ?? "Todas"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todas</SelectItem>
@@ -248,19 +403,18 @@ export default async function ReportsPage({
               <Select
                 name="userId"
                 defaultValue={userValue || "all"}
-                items={Object.fromEntries([
-                  ["all", "Todos os usuários"],
-                  ...users.map((user) => [user.id, user.name]),
-                ])}
+                items={userLabels}
               >
                 <SelectTrigger className="w-full">
-                  <SelectValue />
+                  <SelectValue>
+                    {userLabels[userValue || "all"] ?? "Todos os usuários"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os usuários</SelectItem>
                   {users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
-                      {user.name}
+                      {userLabel(user)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -279,9 +433,9 @@ export default async function ReportsPage({
             </Button>
           </form>
           <p className="mt-3 text-xs text-muted-foreground">
-            Centro de custo, Projeto Semear, faturabilidade, usuário e ticket ou
-            descrição refinam os apontamentos, os totais de horas e a
-            exportação. Indicadores de tickets consideram o período informado.
+            A tela abre nos seus apontamentos. Centro de custo inclui horas
+            diretas e o rateio dos projetos Semear. A exportação usa os mesmos
+            filtros e nomes.
           </p>
         </CardContent>
       </Card>
@@ -354,8 +508,8 @@ export default async function ReportsPage({
           <CardHeader>
             <CardTitle>Horas por centro de custo e projeto</CardTitle>
             <CardDescription>
-              Base quantitativa para gestão e cobrança; valores monetários não
-              foram definidos.
+              Projetos Semear mostram o rateio cadastrado; a duração é a hora
+              original apontada.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -364,6 +518,7 @@ export default async function ReportsPage({
                 <TableRow>
                   <TableHead>Classificação</TableHead>
                   <TableHead>Tipo</TableHead>
+                  <TableHead>Rateio</TableHead>
                   <TableHead className="text-right">Duração</TableHead>
                 </TableRow>
               </TableHeader>
@@ -375,6 +530,9 @@ export default async function ReportsPage({
                       <TableCell className="text-muted-foreground">
                         {item.type}
                       </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {item.rateio}
+                      </TableCell>
                       <TableCell className="text-right font-mono tabular-nums">
                         {formatDuration(item.seconds)}
                       </TableCell>
@@ -383,7 +541,7 @@ export default async function ReportsPage({
                 ) : (
                   <TableRow>
                     <TableCell
-                      colSpan={3}
+                      colSpan={4}
                       className="h-24 text-center text-muted-foreground"
                     >
                       Sem apontamentos no período.
@@ -395,6 +553,46 @@ export default async function ReportsPage({
           </CardContent>
         </Card>
       </div>
+      <Card>
+        <CardHeader>
+          <CardTitle>Horas rateadas por centro de custo</CardTitle>
+          <CardDescription>
+            Horas lançadas direto no centro de custo somadas à fração dos
+            projetos Semear com rateio.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Centro de custo</TableHead>
+                <TableHead className="text-right">Duração</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {allocatedRows.length ? (
+                allocatedRows.map((item) => (
+                  <TableRow key={item.key}>
+                    <TableCell>{item.name}</TableCell>
+                    <TableCell className="text-right font-mono tabular-nums">
+                      {formatDuration(item.seconds)}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell
+                    colSpan={2}
+                    className="h-24 text-center text-muted-foreground"
+                  >
+                    Sem apontamentos no período.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
     </div>
   );
 }

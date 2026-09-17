@@ -1,6 +1,7 @@
 import { Prisma, TimeEntryStatus } from "@prisma/client";
 
 import { ApiError } from "@/lib/http/api-error";
+import { prisma } from "@/lib/prisma";
 
 const PROJECT_ID = /^(cost-center|manual):([0-9a-f-]{36})$/i;
 const UUID =
@@ -68,16 +69,18 @@ export function reportFilters(searchParams: URLSearchParams, now = new Date()) {
       "INVALID_USER",
       "O usuário informado não é válido.",
     );
+  const costCenterId =
+    explicitCostCenter ||
+    (projectKind === "cost-center" ? (project?.[2] ?? "") : "");
+  const manualProjectId =
+    explicitManualProject ||
+    (projectKind === "manual" ? (project?.[2] ?? "") : "");
 
   const where: Prisma.TimeEntryWhereInput = {
     status: { not: TimeEntryStatus.VOIDED },
     startedAt: { gte: from, lte: to },
-    ...(explicitCostCenter || projectKind === "cost-center"
-      ? { costCenterId: explicitCostCenter || project?.[2] }
-      : {}),
-    ...(explicitManualProject || projectKind === "manual"
-      ? { manualProjectId: explicitManualProject || project?.[2] }
-      : {}),
+    ...(costCenterId ? { costCenterId } : {}),
+    ...(manualProjectId ? { manualProjectId } : {}),
     ...(billableValue === "billable" ? { billable: true } : {}),
     ...(billableValue === "non-billable" ? { billable: false } : {}),
     ...(userId ? { userId } : {}),
@@ -101,5 +104,53 @@ export function reportFilters(searchParams: URLSearchParams, now = new Date()) {
       : {}),
   };
 
-  return { from, to, where };
+  return {
+    from,
+    to,
+    where,
+    costCenterId,
+    manualProjectId,
+    userId: userId || "",
+  };
+}
+
+export function includeRateioProjects(
+  where: Prisma.TimeEntryWhereInput,
+  costCenterId: string,
+  projectIdsWithShare: string[],
+): Prisma.TimeEntryWhereInput {
+  const { costCenterId: _direct, ...rest } = where;
+  return {
+    AND: [
+      rest,
+      {
+        OR: [
+          { costCenterId },
+          ...(projectIdsWithShare.length
+            ? [{ manualProjectId: { in: projectIdsWithShare } }]
+            : []),
+        ],
+      },
+    ],
+  };
+}
+
+export async function reportTimeEntryWhere(
+  searchParams: URLSearchParams,
+  now?: Date,
+) {
+  const filters = reportFilters(searchParams, now);
+  if (!filters.costCenterId) return filters;
+  const shares = await prisma.projectCostCenterShare.findMany({
+    where: { costCenterId: filters.costCenterId },
+    select: { manualProjectId: true },
+  });
+  return {
+    ...filters,
+    where: includeRateioProjects(
+      filters.where,
+      filters.costCenterId,
+      shares.map((share) => share.manualProjectId),
+    ),
+  };
 }

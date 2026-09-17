@@ -26,6 +26,46 @@ export function formatDateOnly(value: Date | string) {
   }).format(date);
 }
 
+const UUID_LIKE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function displayPersonName(name: string, email?: string | null) {
+  if (UUID_LIKE.test(name.trim()) && email) return email;
+  return name;
+}
+
+export function formatCatalogLabel(
+  code: string | null | undefined,
+  name: string,
+) {
+  return code ? `${code} · ${name}` : name;
+}
+
+export const RATEIO_TOTAL_BPS = 10_000;
+
+export function formatSharePercent(shareBps: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(shareBps / 100);
+}
+
+export function formatRateioSummary(
+  shares: Array<{
+    shareBps: number;
+    code: string;
+    name: string;
+  }>,
+) {
+  if (!shares.length) return "";
+  return shares
+    .map(
+      (share) =>
+        `${formatSharePercent(share.shareBps)}% ${share.code} · ${share.name}`,
+    )
+    .join("; ");
+}
+
 export function formatDuration(totalSeconds: number) {
   const seconds = Math.max(0, Math.floor(totalSeconds));
   const hours = Math.floor(seconds / 3600);
