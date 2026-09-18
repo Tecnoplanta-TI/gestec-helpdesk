@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
   const type = request.nextUrl.searchParams.get("type");
   const code = request.nextUrl.searchParams.get("code");
   const flow = passwordFlowFromTokenType(type);
-  if ((!tokenHash || !flow) && !code) {
+  if ((tokenHash && !flow) || (!tokenHash && !code)) {
     return loginRedirect(request, type === "recovery" ? "recovery" : "invite");
   }
 
@@ -48,11 +48,13 @@ export async function GET(request: NextRequest) {
 
   const result = tokenHash
     ? await supabase.auth.verifyOtp({
-      token_hash: tokenHash,
+        token_hash: tokenHash,
         type: flow === "recovery" ? "recovery" : "invite",
       })
     : await supabase.auth.exchangeCodeForSession(code!);
-  if (result.error) return loginRedirect(request);
+  if (result.error) {
+    return loginRedirect(request, flow === "recovery" ? "recovery" : "invite");
+  }
 
   return response;
 }
