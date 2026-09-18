@@ -10,7 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 
-export function SetPasswordForm() {
+type SetPasswordFormProps = {
+  successRedirectTo?: string;
+};
+
+export function SetPasswordForm({
+  successRedirectTo = "/gestec_help_desk/jornada",
+}: SetPasswordFormProps) {
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +41,7 @@ export function SetPasswordForm() {
         setError("Não foi possível definir sua senha. Abra novamente o convite e tente de novo.");
         return;
       }
-      window.location.assign("/gestec_help_desk/jornada");
+      window.location.assign(successRedirectTo);
     } catch {
       setError("Não foi possível definir sua senha. Tente novamente em alguns instantes.");
     } finally {

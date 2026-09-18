@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import Link from "next/link";
 
 export function LoginForm() {
   const [email, setEmail] = useState("");
@@ -53,6 +54,9 @@ export function LoginForm() {
           <HugeiconsIcon icon={Login02Icon} />
           {submitting ? "Entrando..." : "Entrar"}
         </Button>
+        <Link className="text-center text-sm text-primary underline-offset-4 hover:underline" href="/recuperar-senha">
+          Esqueci minha senha
+        </Link>
         <FieldDescription className="text-center">
           Seu acesso é administrado com segurança pela equipe Gestec.
         </FieldDescription>
