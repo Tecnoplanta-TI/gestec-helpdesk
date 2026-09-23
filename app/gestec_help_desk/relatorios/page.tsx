@@ -349,6 +349,17 @@ export default async function ReportsPage({
               label: userLabel(user),
             }))}
           />
+          <Button
+            render={
+              <a
+                href={`/api/v1/gestec-help-desk/reports/time-entries.xlsx?${reportParams.toString()}`}
+                download
+              />
+            }
+          >
+            <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />
+            Exportar (.xlsx)
+          </Button>
         </div>
       </div>
       <p className="text-sm text-muted-foreground">
@@ -517,26 +528,13 @@ export default async function ReportsPage({
           </Card>
         </TabsContent>
         <TabsContent value="detailed" className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Apontamentos detalhados</h2>
-              <p className="text-sm text-muted-foreground">
-                {detailedEntries.length === 500
-                  ? "Exibindo os 500 apontamentos mais recentes do período."
-                  : `${detailedEntries.length} apontamento(s) no período.`}
-              </p>
-            </div>
-            <Button
-              render={
-                <a
-                  href={`/api/v1/gestec-help-desk/reports/time-entries.xlsx?${reportParams.toString()}`}
-                  download
-                />
-              }
-            >
-              <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />
-              Exportar (.xlsx)
-            </Button>
+          <div>
+            <h2 className="text-lg font-semibold">Apontamentos detalhados</h2>
+            <p className="text-sm text-muted-foreground">
+              {detailedEntries.length === 500
+                ? "Exibindo os 500 apontamentos mais recentes do período."
+                : `${detailedEntries.length} apontamento(s) no período.`}
+            </p>
           </div>
           {canManageTimeEntries ? (
             <AdminTimeEntryManager
