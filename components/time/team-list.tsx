@@ -13,14 +13,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatHoursMinutes } from "@/lib/format";
-import { goalProgressPercent } from "@/lib/domain/time-goals";
 
 export type TeamListItem = {
   userId: string;
   name: string;
   email: string;
   seconds: number;
-  goalSeconds: number;
 };
 
 export function TeamList({ members }: { members: TeamListItem[] }) {
@@ -29,8 +27,7 @@ export function TeamList({ members }: { members: TeamListItem[] }) {
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Equipe</h1>
         <p className="text-sm text-muted-foreground">
-          Horas do mês e percentual da meta. Gráficos comparativos ficam em
-          backlog.
+          Horas registradas no mês pela equipe.
         </p>
       </div>
       {members.length === 0 ? (
@@ -50,7 +47,6 @@ export function TeamList({ members }: { members: TeamListItem[] }) {
                 <TableHead>Pessoa</TableHead>
                 <TableHead>E-mail</TableHead>
                 <TableHead>Horas no mês</TableHead>
-                <TableHead>Meta</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -62,9 +58,6 @@ export function TeamList({ members }: { members: TeamListItem[] }) {
                   </TableCell>
                   <TableCell className="tabular-nums">
                     {formatHoursMinutes(member.seconds)}
-                  </TableCell>
-                  <TableCell className="tabular-nums">
-                    {goalProgressPercent(member.seconds, member.goalSeconds)}%
                   </TableCell>
                 </TableRow>
               ))}

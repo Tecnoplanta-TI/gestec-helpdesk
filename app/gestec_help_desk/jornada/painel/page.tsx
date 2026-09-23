@@ -4,7 +4,7 @@ import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
 import {
   DAILY_GOAL_SECONDS,
-  monthlyGoalSeconds,
+  elapsedMonthlyGoalSeconds,
 } from "@/lib/domain/time-goals";
 import { effectiveDailyGoalSecondsByUser } from "@/lib/domain/effective-goals";
 import { listTeamMonthHours } from "@/lib/domain/team-time";
@@ -79,8 +79,8 @@ export default async function JornadaPainelPage({
     now,
     DAILY_GOAL_SECONDS,
   );
-  const monthlySecondsForUser = (userId: string) =>
-    monthlyGoalSeconds(
+  const elapsedGoalSecondsForUser = (userId: string) =>
+    elapsedMonthlyGoalSeconds(
       dailyGoalSecondsByUser.get(userId) ?? DAILY_GOAL_SECONDS,
       now,
     );
@@ -91,12 +91,10 @@ export default async function JornadaPainelPage({
       weekSeconds={weekEntries._sum.durationSeconds ?? 0}
       monthSeconds={monthEntries._sum.durationSeconds ?? 0}
       billableSeconds={monthBillable._sum.durationSeconds ?? 0}
-      monthlyGoalSeconds={
-        monthlySecondsForUser(session.userId)
-      }
+      goalThroughTodaySeconds={elapsedGoalSecondsForUser(session.userId)}
       team={team.map((member) => ({
         ...member,
-          goalSeconds: monthlySecondsForUser(member.userId),
+        goalSeconds: elapsedGoalSecondsForUser(member.userId),
       }))}
     />
   );

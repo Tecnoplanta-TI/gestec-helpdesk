@@ -10,14 +10,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -37,8 +30,10 @@ import {
   formatDuration,
   formatRateioSummary,
   ticketStatusLabels,
+  timeEntrySourceLabels,
 } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { ReportsFiltersSheet } from "@/components/reports/reports-filters-sheet";
 
 export const dynamic = "force-dynamic";
 
@@ -68,7 +63,8 @@ export default async function ReportsPage({
   const billableValue = scalar(params.billable);
   const ticketValue = scalar(params.ticket);
   const requestedUser = scalar(params.userId);
-  const userValue = requestedUser || session.userId;
+  const userValue =
+    requestedUser && requestedUser !== "all" ? requestedUser : session.userId;
   const reportParams = new URLSearchParams({ from: fromValue, to: toValue });
   if (projectValue && projectValue !== "all")
     reportParams.set("manualProject", projectValue);
@@ -77,7 +73,7 @@ export default async function ReportsPage({
   if (billableValue && billableValue !== "all")
     reportParams.set("billable", billableValue);
   if (ticketValue) reportParams.set("ticket", ticketValue);
-  if (userValue && userValue !== "all") reportParams.set("userId", userValue);
+  if (requestedUser !== "all") reportParams.set("userId", userValue);
   const {
     from,
     to,
@@ -91,6 +87,7 @@ export default async function ReportsPage({
     projects,
     costCenters,
     users,
+    detailedEntries,
   ] = await Promise.all([
     prisma.ticket.groupBy({
       by: ["status"],
@@ -130,6 +127,25 @@ export default async function ReportsPage({
       },
       select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
+    }),
+    prisma.timeEntry.findMany({
+      where: timeWhere,
+      orderBy: { startedAt: "desc" },
+      take: 500,
+      select: {
+        id: true,
+        description: true,
+        startedAt: true,
+        endedAt: true,
+        durationSeconds: true,
+        billable: true,
+        source: true,
+        projectNameSnapshot: true,
+        user: { select: { name: true, email: true } },
+        ticket: { select: { number: true, externalReference: true } },
+        costCenter: { select: { code: true, name: true } },
+        manualProject: { select: { code: true, name: true } },
+      },
     }),
   ]);
   const projectIds = [
@@ -181,32 +197,14 @@ export default async function ReportsPage({
   const activeCostCenters = costCenters.filter(
     (costCenter) => costCenter.active || costCenter.id === costCenterValue,
   );
-  const costCenterLabels: Record<string, string> = {
-    all: "Todos",
-    ...Object.fromEntries(
-      activeCostCenters.map((costCenter) => [
-        costCenter.id,
-        formatCatalogLabel(costCenter.code, costCenter.name),
-      ]),
-    ),
-  };
-  const projectLabels: Record<string, string> = {
-    all: "Todos",
-    ...Object.fromEntries(
-      projects.map((project) => [
-        project.id.replace(/^manual:/, ""),
-        formatCatalogLabel(project.code, project.name),
-      ]),
-    ),
-  };
-  const billableLabels: Record<string, string> = {
-    all: "Todas",
-    billable: "Faturável",
-    "non-billable": "Não faturável",
-  };
-  const userLabels: Record<string, string> = {
-    all: "Todos os usuários",
-    ...Object.fromEntries(users.map((user) => [user.id, userLabel(user)])),
+  const filterState = {
+    from: fromValue,
+    to: toValue,
+    costCenter: costCenterValue || "all",
+    manualProject: projectValue || "all",
+    billable: billableValue || "all",
+    userId: requestedUser || session.userId,
+    ticket: ticketValue,
   };
   const totalSeconds = hoursByBillable.reduce(
     (sum, row) => sum + (row._sum.durationSeconds ?? 0),
@@ -309,290 +307,306 @@ export default async function ReportsPage({
             selecionado.
           </p>
         </div>
-        <Button
-          render={
-            <a
-              href={`/api/v1/gestec-help-desk/reports/time-entries.xlsx?${reportParams.toString()}`}
-              download
-            />
-          }
-        >
-          <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />{" "}
-          Exportar apontamentos (.xlsx)
-        </Button>
-      </div>
-      <Card>
-        <CardContent className="pt-6">
-          <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              De
-              <Input type="date" name="from" defaultValue={fromValue} />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Até
-              <Input type="date" name="to" defaultValue={toValue} />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Centro de custo
-              <Select
-                name="costCenter"
-                defaultValue={costCenterValue || "all"}
-                items={costCenterLabels}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue>
-                    {costCenterLabels[costCenterValue || "all"] ?? "Todos"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {activeCostCenters.map((costCenter) => (
-                    <SelectItem key={costCenter.id} value={costCenter.id}>
-                      {formatCatalogLabel(costCenter.code, costCenter.name)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Projeto Semear
-              <Select
-                name="manualProject"
-                defaultValue={projectValue || "all"}
-                items={projectLabels}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue>
-                    {projectLabels[projectValue || "all"] ?? "Todos"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem
-                      key={project.id}
-                      value={project.id.replace(/^manual:/, "")}
-                    >
-                      {formatCatalogLabel(project.code, project.name)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Faturabilidade
-              <Select
-                name="billable"
-                defaultValue={billableValue || "all"}
-                items={billableLabels}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue>
-                    {billableLabels[billableValue || "all"] ?? "Todas"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="billable">Faturável</SelectItem>
-                  <SelectItem value="non-billable">Não faturável</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Usuário
-              <Select
-                name="userId"
-                defaultValue={userValue || "all"}
-                items={userLabels}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue>
-                    {userLabels[userValue || "all"] ?? "Todos os usuários"}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os usuários</SelectItem>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {userLabel(user)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Ticket ou descrição
-              <Input
-                name="ticket"
-                defaultValue={ticketValue}
-                placeholder="#1842 ou termo"
+        <div className="flex flex-wrap gap-2">
+          <ReportsFiltersSheet
+            filters={filterState}
+            costCenters={activeCostCenters.map((costCenter) => ({
+              value: costCenter.id,
+              label: formatCatalogLabel(costCenter.code, costCenter.name),
+            }))}
+            projects={projects.map((project) => ({
+              value: project.id.replace(/^manual:/, ""),
+              label: formatCatalogLabel(project.code, project.name),
+            }))}
+            users={users.map((user) => ({
+              value: user.id,
+              label: userLabel(user),
+            }))}
+          />
+          <Button
+            render={
+              <a
+                href={`/api/v1/gestec-help-desk/reports/time-entries.xlsx?${reportParams.toString()}`}
+                download
               />
-            </label>
-            <Button type="submit" className="self-end">
-              Aplicar filtros
-            </Button>
-          </form>
-          <p className="mt-3 text-xs text-muted-foreground">
-            A tela abre nos seus apontamentos. Centro de custo inclui horas
-            diretas e o rateio dos projetos Semear. A exportação usa os mesmos
-            filtros e nomes.
-          </p>
-        </CardContent>
-      </Card>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardDescription>Tickets no período</CardDescription>
-            <CardTitle className="text-3xl">
-              {ticketsByStatus.reduce((sum, item) => sum + item._count, 0)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Horas registradas</CardDescription>
-            <CardTitle className="text-3xl tabular-nums">
-              {formatDuration(totalSeconds)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Horas faturáveis</CardDescription>
-            <CardTitle className="text-3xl tabular-nums">
-              {formatDuration(billableSeconds)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Média das avaliações</CardDescription>
-            <CardTitle className="text-3xl">
-              {evaluations._count
-                ? `${evaluations._avg.score?.toFixed(1)}/10`
-                : "Sem dados"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+            }
+          >
+            <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />
+            Exportar (.xlsx)
+          </Button>
+        </div>
       </div>
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Tickets por status</CardTitle>
-            <CardDescription>
-              Distribuição de aberturas no período.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Quantidade</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ticketsByStatus.map((item) => (
-                  <TableRow key={item.status}>
-                    <TableCell>{ticketStatusLabels[item.status]}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {item._count}
-                    </TableCell>
+      <p className="text-sm text-muted-foreground">
+        Centro de custo inclui horas diretas e o rateio dos projetos Semear. A
+        exportação usa os mesmos filtros selecionados.
+      </p>
+      <Tabs defaultValue="summary" className="gap-6">
+        <TabsList aria-label="Visão do relatório">
+          <TabsTrigger value="summary">Resumido</TabsTrigger>
+          <TabsTrigger value="detailed">Detalhado</TabsTrigger>
+        </TabsList>
+        <TabsContent value="summary" className="flex flex-col gap-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Card>
+              <CardHeader>
+                <CardDescription>Tickets no período</CardDescription>
+                <CardTitle className="text-3xl">
+                  {ticketsByStatus.reduce((sum, item) => sum + item._count, 0)}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Horas registradas</CardDescription>
+                <CardTitle className="text-3xl tabular-nums">
+                  {formatDuration(totalSeconds)}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Horas faturáveis</CardDescription>
+                <CardTitle className="text-3xl tabular-nums">
+                  {formatDuration(billableSeconds)}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Média das avaliações</CardDescription>
+                <CardTitle className="text-3xl">
+                  {evaluations._count
+                    ? `${evaluations._avg.score?.toFixed(1)}/10`
+                    : "Sem dados"}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Tickets por status</CardTitle>
+                <CardDescription>
+                  Distribuição de aberturas no período.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Quantidade</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ticketsByStatus.map((item) => (
+                      <TableRow key={item.status}>
+                        <TableCell>{ticketStatusLabels[item.status]}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {item._count}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Horas por centro de custo e projeto</CardTitle>
+                <CardDescription>
+                  Projetos Semear mostram o rateio cadastrado; a duração é a
+                  hora original apontada.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Classificação</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Rateio</TableHead>
+                      <TableHead className="text-right">Duração</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {projectTotals.length ? (
+                      projectTotals.map((item) => (
+                        <TableRow key={item.key}>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {item.type}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {item.rateio}
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular-nums">
+                            {formatDuration(item.seconds)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="h-24 text-center text-muted-foreground"
+                        >
+                          Sem apontamentos no período.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Horas rateadas por centro de custo</CardTitle>
+              <CardDescription>
+                Horas lançadas direto no centro de custo somadas à fração dos
+                projetos Semear com rateio.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Centro de custo</TableHead>
+                    <TableHead className="text-right">Duração</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Horas por centro de custo e projeto</CardTitle>
-            <CardDescription>
-              Projetos Semear mostram o rateio cadastrado; a duração é a hora
-              original apontada.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Classificação</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Rateio</TableHead>
-                  <TableHead className="text-right">Duração</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {projectTotals.length ? (
-                  projectTotals.map((item) => (
-                    <TableRow key={item.key}>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {item.type}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {item.rateio}
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">
-                        {formatDuration(item.seconds)}
+                </TableHeader>
+                <TableBody>
+                  {allocatedRows.length ? (
+                    allocatedRows.map((item) => (
+                      <TableRow key={item.key}>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">
+                          {formatDuration(item.seconds)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={2}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        Sem apontamentos no período.
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={4}
-                      className="h-24 text-center text-muted-foreground"
-                    >
-                      Sem apontamentos no período.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Horas rateadas por centro de custo</CardTitle>
-          <CardDescription>
-            Horas lançadas direto no centro de custo somadas à fração dos
-            projetos Semear com rateio.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Centro de custo</TableHead>
-                <TableHead className="text-right">Duração</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {allocatedRows.length ? (
-                allocatedRows.map((item) => (
-                  <TableRow key={item.key}>
-                    <TableCell>{item.name}</TableCell>
-                    <TableCell className="text-right font-mono tabular-nums">
-                      {formatDuration(item.seconds)}
-                    </TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={2}
-                    className="h-24 text-center text-muted-foreground"
-                  >
-                    Sem apontamentos no período.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="detailed" className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Apontamentos detalhados</h2>
+              <p className="text-sm text-muted-foreground">
+                {detailedEntries.length === 500
+                  ? "Exibindo os 500 apontamentos mais recentes do período."
+                  : `${detailedEntries.length} apontamento(s) no período.`}
+              </p>
+            </div>
+            <Button
+              render={
+                <a
+                  href={`/api/v1/gestec-help-desk/reports/time-entries.xlsx?${reportParams.toString()}`}
+                  download
+                />
+              }
+            >
+              <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />
+              Exportar (.xlsx)
+            </Button>
+          </div>
+          <Card>
+            <CardContent className="p-0">
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Data e hora</TableHead>
+                      <TableHead>Descrição</TableHead>
+                      <TableHead>Classificação</TableHead>
+                      <TableHead>Usuário</TableHead>
+                      <TableHead>Ticket</TableHead>
+                      <TableHead>Origem</TableHead>
+                      <TableHead className="text-right">Duração</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {detailedEntries.length ? (
+                      detailedEntries.map((entry) => {
+                        const classification = entry.costCenter
+                          ? formatCatalogLabel(
+                              entry.costCenter.code,
+                              entry.costCenter.name,
+                            )
+                          : entry.manualProject
+                            ? formatCatalogLabel(
+                                entry.manualProject.code,
+                                entry.manualProject.name,
+                              )
+                            : (entry.projectNameSnapshot ??
+                              "Sem classificação");
+                        return (
+                          <TableRow key={entry.id}>
+                            <TableCell className="whitespace-nowrap tabular-nums">
+                              {format(entry.startedAt, "dd/MM/yyyy HH:mm")}
+                            </TableCell>
+                            <TableCell className="min-w-64">
+                              <p className="max-w-96 truncate font-medium">
+                                {entry.description || "Sem descrição"}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                {entry.billable ? "Faturável" : "Não faturável"}
+                              </p>
+                            </TableCell>
+                            <TableCell className="min-w-52">
+                              {classification}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap">
+                              {displayPersonName(
+                                entry.user.name,
+                                entry.user.email,
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              {entry.ticket
+                                ? `#${entry.ticket.number}${entry.ticket.externalReference ? ` · ${entry.ticket.externalReference}` : ""}`
+                                : "—"}
+                            </TableCell>
+                            <TableCell className="whitespace-nowrap text-muted-foreground">
+                              {timeEntrySourceLabels[entry.source] ??
+                                entry.source}
+                            </TableCell>
+                            <TableCell className="text-right font-mono tabular-nums">
+                              {formatDuration(entry.durationSeconds)}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={7}
+                          className="h-24 text-center text-muted-foreground"
+                        >
+                          Sem apontamentos no período.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

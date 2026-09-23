@@ -9,6 +9,7 @@ import {
 } from "@/lib/domain/time-query";
 import {
   DAILY_GOAL_SECONDS,
+  elapsedMonthlyGoalSeconds,
   goalProgressPercent,
   monthlyGoalSeconds,
 } from "@/lib/domain/time-goals";
@@ -102,6 +103,15 @@ describe("metas da Jornada", () => {
       monthlyGoalSeconds(6 * 60 * 60, new Date("2026-02-03T12:00:00")),
     ).toBe(28 * DAILY_GOAL_SECONDS);
     expect(goalProgressPercent(10800, DAILY_GOAL_SECONDS)).toBe(50);
+  });
+
+  it("calcula o acompanhamento da meta pelos dias já transcorridos", () => {
+    expect(
+      elapsedMonthlyGoalSeconds(8 * 60 * 60, new Date("2026-09-03T12:00:00")),
+    ).toBe(3 * 8 * 60 * 60);
+    expect(
+      elapsedMonthlyGoalSeconds(6 * 60 * 60, new Date("2026-02-28T12:00:00")),
+    ).toBe(28 * 6 * 60 * 60);
   });
 
   it("formata as boxes de hoje e meta", () => {
