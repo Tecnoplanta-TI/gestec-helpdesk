@@ -21,6 +21,12 @@
 # production
 /build
 
+# local deployment bundles (generated standalone builds)
+/release/
+/release-*/
+/gestec-helpdesk-release.tar.gz
+/gestec-helpdesk-*-release.tar.gz
+
 # misc
 .DS_Store
 *.pem

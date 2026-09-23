@@ -198,6 +198,38 @@ export async function listProjects(
   return [...centers, ...manuals];
 }
 
+export function toTimeProjects(
+  costCenters: Array<{ id: string; code: string; name: string }>,
+  manuals: Array<{
+    id: string;
+    name: string;
+    code?: string | null;
+    billableByDefault?: boolean;
+  }>,
+) {
+  const centers = [...costCenters]
+    .sort((left, right) => compareCostCenterCode(left.code, right.code))
+    .map((costCenter) => ({
+      id: costCenter.id.startsWith("cost-center:")
+        ? costCenter.id
+        : `cost-center:${costCenter.id}`,
+      kind: "cost-center" as const,
+      name: costCenter.name,
+      code: costCenter.code,
+      billableByDefault: true,
+    }));
+  const projects = manuals.map((project) => ({
+    id: project.id.startsWith("manual:")
+      ? project.id
+      : `manual:${project.id}`,
+    kind: "manual" as const,
+    name: project.name,
+    code: project.code ?? null,
+    billableByDefault: project.billableByDefault ?? false,
+  }));
+  return [...centers, ...projects];
+}
+
 export async function listProjectCatalog(options?: {
   includePrivateManual?: boolean;
   includeInactive?: boolean;

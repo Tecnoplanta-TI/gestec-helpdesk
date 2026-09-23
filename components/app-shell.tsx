@@ -238,21 +238,23 @@ export function AppShell({
                   />
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="right" align="end" className="w-64">
-                  <DropdownMenuLabel>
-                    <div className="flex min-w-0 items-center gap-3">
-                      <Avatar className="size-8">
-                        <AvatarFallback>{initials}</AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">
-                          {user.name}
-                        </p>
-                        <p className="truncate text-xs font-normal">
-                          {user.email}
-                        </p>
+                  <DropdownMenuGroup>
+                    <DropdownMenuLabel>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <Avatar className="size-8">
+                          <AvatarFallback>{initials}</AvatarFallback>
+                        </Avatar>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">
+                            {user.name}
+                          </p>
+                          <p className="truncate text-xs font-normal">
+                            {user.email}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  </DropdownMenuLabel>
+                    </DropdownMenuLabel>
+                  </DropdownMenuGroup>
                   <DropdownMenuSeparator />
                   <DropdownMenuGroup>
                     <DropdownMenuItem
@@ -271,15 +273,17 @@ export function AppShell({
                     ) : null}
                   </DropdownMenuGroup>
                   <DropdownMenuSeparator />
-                  <form action="/auth/sign-out" method="post">
-                    <DropdownMenuItem
-                      render={<button type="submit" />}
-                      variant="destructive"
-                    >
-                      <HugeiconsIcon icon={Logout01Icon} />
-                      Sair da conta
-                    </DropdownMenuItem>
-                  </form>
+                  <DropdownMenuGroup>
+                    <form action="/auth/sign-out" method="post">
+                      <DropdownMenuItem
+                        render={<button type="submit" />}
+                        variant="destructive"
+                      >
+                        <HugeiconsIcon icon={Logout01Icon} />
+                        Sair da conta
+                      </DropdownMenuItem>
+                    </form>
+                  </DropdownMenuGroup>
                 </DropdownMenuContent>
               </DropdownMenu>
             </SidebarMenuItem>

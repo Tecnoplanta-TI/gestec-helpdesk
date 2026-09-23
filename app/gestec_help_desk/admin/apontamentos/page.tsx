@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { requirePagePermission } from "@/lib/auth/page-session";
-import { listProjectCatalog } from "@/lib/domain/projects";
+import { listProjectCatalog, toTimeProjects } from "@/lib/domain/projects";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +35,7 @@ export default async function AdminTimeEntriesPage({
   const from = new Date(`${fromValue}T00:00:00`);
   const to = addDays(new Date(`${toValue}T00:00:00`), 1);
 
-  const [entries, users, projects] = await Promise.all([
+  const [entries, users, catalog, costCenters] = await Promise.all([
     prisma.timeEntry.findMany({
       where: { startedAt: { gte: from, lt: to } },
       include: {
@@ -53,7 +53,12 @@ export default async function AdminTimeEntriesPage({
       includePrivateManual: true,
       includeInactive: true,
     }),
+    prisma.costCenter.findMany({
+      select: { id: true, code: true, name: true },
+      orderBy: [{ code: "asc" }, { name: "asc" }],
+    }),
   ]);
+  const projects = toTimeProjects(costCenters, catalog);
 
   return (
     <div className="flex flex-col gap-6">
@@ -87,10 +92,7 @@ export default async function AdminTimeEntriesPage({
             entries={JSON.parse(JSON.stringify(entries))}
             users={users}
             currentUserId={session.userId}
-            projects={projects.map((project) => ({
-              id: project.id,
-              name: project.name,
-            }))}
+            projects={projects}
           />
         </CardContent>
       </Card>

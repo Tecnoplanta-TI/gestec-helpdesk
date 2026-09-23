@@ -6,6 +6,7 @@ import {
   nextManualProjectCode,
 } from "@/lib/domain/project-rateio";
 import { includeRateioProjects } from "@/lib/domain/report-query";
+import { toTimeProjects } from "@/lib/domain/projects";
 import { manualProjectSchema } from "@/lib/domain/schemas";
 import {
   displayPersonName,
@@ -114,5 +115,40 @@ describe("rótulos amigáveis", () => {
         { shareBps: 5000, code: "6", name: "Veículos Pesados" },
       ]),
     ).toBe("50% 2 · Viveiro Matriz; 50% 6 · Veículos Pesados");
+  });
+});
+
+describe("seletor de centro de custo e projeto", () => {
+  it("prefixa centros de custo e reaproveita ids manuais já compostos", () => {
+    const projects = toTimeProjects(
+      [
+        { id: CC_A, code: "2", name: "Viveiro Matriz" },
+        { id: CC_B, code: "10", name: "Administrativo" },
+      ],
+      [
+        {
+          id: `manual:${CC_A}`,
+          name: "Demandas do Setor",
+          code: "PRO-0001",
+          billableByDefault: false,
+        },
+      ],
+    );
+
+    expect(projects.map((project) => project.id)).toEqual([
+      `cost-center:${CC_A}`,
+      `cost-center:${CC_B}`,
+      `manual:${CC_A}`,
+    ]);
+    expect(projects[0]).toMatchObject({
+      kind: "cost-center",
+      name: "Viveiro Matriz",
+      code: "2",
+    });
+    expect(projects[2]).toMatchObject({
+      kind: "manual",
+      name: "Demandas do Setor",
+      billableByDefault: false,
+    });
   });
 });

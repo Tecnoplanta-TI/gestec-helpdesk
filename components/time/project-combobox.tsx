@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -16,7 +15,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ArrowDown01Icon } from "@/lib/icons";
+import { UnfoldMoreIcon } from "@/lib/icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { cn } from "@/lib/utils";
 
@@ -82,21 +81,29 @@ export function ProjectCombobox({
       <PopoverTrigger
         disabled={disabled}
         render={
-          <Button
+          <button
             type="button"
-            variant="outline"
             disabled={disabled}
-            className="min-w-0 flex-1 justify-between font-normal"
             aria-label="Centro de custo ou projeto"
+            className={cn(
+              "flex h-9 w-fit max-w-full min-w-0 items-center justify-between gap-1.5 rounded-3xl border border-transparent bg-input/50 px-3 py-2 text-sm whitespace-nowrap transition-[color,box-shadow,background-color] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
+            )}
           />
         }
       >
-        <span className={cn("truncate", !selected && "text-muted-foreground")}>
+        <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
           {selected ? projectLabel(selected) : placeholder}
         </span>
-        <HugeiconsIcon icon={ArrowDown01Icon} className="size-4 opacity-60" />
+        <HugeiconsIcon
+          icon={UnfoldMoreIcon}
+          strokeWidth={2}
+          className="pointer-events-none size-4 shrink-0 text-muted-foreground"
+        />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 gap-0 p-0">
+      <PopoverContent
+        align="start"
+        className="w-80 gap-0 overflow-hidden p-0"
+      >
         <Command>
           <CommandInput placeholder="Buscar por nome ou código" />
           <CommandList>

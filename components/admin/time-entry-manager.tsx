@@ -17,6 +17,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  ProjectCombobox,
+  type TimeProject,
+} from "@/components/time/project-combobox";
+import {
   Sheet,
   SheetContent,
   SheetDescription,
@@ -73,7 +77,7 @@ export function AdminTimeEntryManager({
 }: {
   entries: AdminTimeEntry[];
   users: Array<{ id: string; name: string }>;
-  projects: Array<{ id: string; name: string }>;
+  projects: TimeProject[];
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -334,31 +338,19 @@ export function AdminTimeEntryManager({
             </Field>
             <Field>
               <FieldLabel>Centro de custo ou projeto</FieldLabel>
-              <Select
+              <ProjectCombobox
+                projects={projects}
+                recentProjectIds={[]}
                 value={form.projectId}
-                onValueChange={(value) =>
+                onChange={(projectId) => {
+                  const project = projects.find((item) => item.id === projectId);
                   setForm((current) => ({
                     ...current,
-                    projectId: value ?? current.projectId,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue>
-                    {(value) =>
-                      projects.find((project) => project.id === value)?.name ??
-                      "Projeto"
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    projectId,
+                    billable: project?.billableByDefault ?? current.billable,
+                  }));
+                }}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-time-ticket">Ticket (UUID)</FieldLabel>

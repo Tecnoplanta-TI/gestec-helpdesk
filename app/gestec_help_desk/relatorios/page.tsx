@@ -22,7 +22,7 @@ import {
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
-import { listProjectCatalog } from "@/lib/domain/projects";
+import { listProjectCatalog, toTimeProjects } from "@/lib/domain/projects";
 import { allocateSeconds } from "@/lib/domain/project-rateio";
 import { reportTimeEntryWhere } from "@/lib/domain/report-query";
 import {
@@ -540,10 +540,7 @@ export default async function ReportsPage({
             <AdminTimeEntryManager
               entries={serializedDetailedEntries}
               users={users.map((user) => ({ id: user.id, name: user.name }))}
-              projects={projects.map((project) => ({
-                id: project.id,
-                name: project.name,
-              }))}
+              projects={toTimeProjects(costCenters, projects)}
               currentUserId={session.userId}
             />
           ) : (

@@ -6,17 +6,23 @@ const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["exceljs", "pg", "pg-boss", "pg-native"],
   experimental: {
-    optimizePackageImports: [
-      "@base-ui/react",
-      "@hugeicons/core-free-icons",
-      "@hugeicons/react",
-    ],
+    optimizePackageImports: ["@hugeicons/core-free-icons", "@hugeicons/react"],
   },
   onDemandEntries: {
     maxInactiveAge: 60 * 60 * 1000,
     pagesBufferLength: 25,
   },
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, nextRuntime, webpack }) => {
+    if (nextRuntime === "edge") {
+      config.plugins.push(
+        new webpack.BannerPlugin({
+          raw: true,
+          banner:
+            'var global = typeof globalThis !== "undefined" ? globalThis : self;',
+        }),
+      );
+      return config;
+    }
     if (!isServer) {
       config.resolve.alias = {
         ...config.resolve.alias,
