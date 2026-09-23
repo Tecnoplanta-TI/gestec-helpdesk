@@ -3,6 +3,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
+import { AdminTimeEntryManager } from "@/components/admin/time-entry-manager";
 import {
   Card,
   CardContent,
@@ -140,6 +141,12 @@ export default async function ReportsPage({
         durationSeconds: true,
         billable: true,
         source: true,
+        status: true,
+        version: true,
+        userId: true,
+        ticketId: true,
+        costCenterId: true,
+        manualProjectId: true,
         projectNameSnapshot: true,
         user: { select: { name: true, email: true } },
         ticket: { select: { number: true, externalReference: true } },
@@ -206,6 +213,25 @@ export default async function ReportsPage({
     userId: requestedUser || session.userId,
     ticket: ticketValue,
   };
+  const canManageTimeEntries = hasPermission(session.role, "admin:manage");
+  const serializedDetailedEntries = detailedEntries.map((entry) => ({
+    id: entry.id,
+    description: entry.description,
+    billable: entry.billable,
+    startedAt: entry.startedAt.toISOString(),
+    endedAt: entry.endedAt.toISOString(),
+    durationSeconds: entry.durationSeconds,
+    status: entry.status,
+    source: entry.source,
+    version: entry.version,
+    userId: entry.userId,
+    ticketId: entry.ticketId,
+    costCenterId: entry.costCenterId,
+    manualProjectId: entry.manualProjectId,
+    user: { name: entry.user.name },
+    ticket: entry.ticket ? { number: entry.ticket.number } : null,
+    projectNameSnapshot: entry.projectNameSnapshot,
+  }));
   const totalSeconds = hoursByBillable.reduce(
     (sum, row) => sum + (row._sum.durationSeconds ?? 0),
     0,
@@ -512,88 +538,102 @@ export default async function ReportsPage({
               Exportar (.xlsx)
             </Button>
           </div>
-          <Card>
-            <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data e hora</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead>Classificação</TableHead>
-                      <TableHead>Usuário</TableHead>
-                      <TableHead>Ticket</TableHead>
-                      <TableHead>Origem</TableHead>
-                      <TableHead className="text-right">Duração</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {detailedEntries.length ? (
-                      detailedEntries.map((entry) => {
-                        const classification = entry.costCenter
-                          ? formatCatalogLabel(
-                              entry.costCenter.code,
-                              entry.costCenter.name,
-                            )
-                          : entry.manualProject
-                            ? formatCatalogLabel(
-                                entry.manualProject.code,
-                                entry.manualProject.name,
-                              )
-                            : (entry.projectNameSnapshot ??
-                              "Sem classificação");
-                        return (
-                          <TableRow key={entry.id}>
-                            <TableCell className="whitespace-nowrap tabular-nums">
-                              {format(entry.startedAt, "dd/MM/yyyy HH:mm")}
-                            </TableCell>
-                            <TableCell className="min-w-64">
-                              <p className="max-w-96 truncate font-medium">
-                                {entry.description || "Sem descrição"}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                {entry.billable ? "Faturável" : "Não faturável"}
-                              </p>
-                            </TableCell>
-                            <TableCell className="min-w-52">
-                              {classification}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap">
-                              {displayPersonName(
-                                entry.user.name,
-                                entry.user.email,
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {entry.ticket
-                                ? `#${entry.ticket.number}${entry.ticket.externalReference ? ` · ${entry.ticket.externalReference}` : ""}`
-                                : "—"}
-                            </TableCell>
-                            <TableCell className="whitespace-nowrap text-muted-foreground">
-                              {timeEntrySourceLabels[entry.source] ??
-                                entry.source}
-                            </TableCell>
-                            <TableCell className="text-right font-mono tabular-nums">
-                              {formatDuration(entry.durationSeconds)}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })
-                    ) : (
+          {canManageTimeEntries ? (
+            <AdminTimeEntryManager
+              entries={serializedDetailedEntries}
+              users={users.map((user) => ({ id: user.id, name: user.name }))}
+              projects={projects.map((project) => ({
+                id: project.id,
+                name: project.name,
+              }))}
+              currentUserId={session.userId}
+            />
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
                       <TableRow>
-                        <TableCell
-                          colSpan={7}
-                          className="h-24 text-center text-muted-foreground"
-                        >
-                          Sem apontamentos no período.
-                        </TableCell>
+                        <TableHead>Data e hora</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Classificação</TableHead>
+                        <TableHead>Usuário</TableHead>
+                        <TableHead>Ticket</TableHead>
+                        <TableHead>Origem</TableHead>
+                        <TableHead className="text-right">Duração</TableHead>
                       </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
+                    </TableHeader>
+                    <TableBody>
+                      {detailedEntries.length ? (
+                        detailedEntries.map((entry) => {
+                          const classification = entry.costCenter
+                            ? formatCatalogLabel(
+                                entry.costCenter.code,
+                                entry.costCenter.name,
+                              )
+                            : entry.manualProject
+                              ? formatCatalogLabel(
+                                  entry.manualProject.code,
+                                  entry.manualProject.name,
+                                )
+                              : (entry.projectNameSnapshot ??
+                                "Sem classificação");
+                          return (
+                            <TableRow key={entry.id}>
+                              <TableCell className="whitespace-nowrap tabular-nums">
+                                {format(entry.startedAt, "dd/MM/yyyy HH:mm")}
+                              </TableCell>
+                              <TableCell className="min-w-64">
+                                <p className="max-w-96 truncate font-medium">
+                                  {entry.description || "Sem descrição"}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {entry.billable
+                                    ? "Faturável"
+                                    : "Não faturável"}
+                                </p>
+                              </TableCell>
+                              <TableCell className="min-w-52">
+                                {classification}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {displayPersonName(
+                                  entry.user.name,
+                                  entry.user.email,
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {entry.ticket
+                                  ? `#${entry.ticket.number}${entry.ticket.externalReference ? ` · ${entry.ticket.externalReference}` : ""}`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                {timeEntrySourceLabels[entry.source] ??
+                                  entry.source}
+                              </TableCell>
+                              <TableCell className="text-right font-mono tabular-nums">
+                                {formatDuration(entry.durationSeconds)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell
+                            colSpan={7}
+                            className="h-24 text-center text-muted-foreground"
+                          >
+                            Sem apontamentos no período.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
     </div>
