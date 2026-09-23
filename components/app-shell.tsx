@@ -9,8 +9,12 @@ import {
   Clock01Icon,
   ComputerIcon,
   DashboardSquare01Icon,
+  AccountSetting01Icon,
+  ArrowDown01Icon,
   InboxIcon,
   KanbanIcon,
+  Logout01Icon,
+  Notification01Icon,
   Ticket01Icon,
 } from "@/lib/icons";
 import { HugeiconsIcon } from "@hugeicons/react";
@@ -32,6 +36,15 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
 import { hasPermission, type Permission } from "@/lib/auth/permissions";
 import { isJornadaOnlyModeEnabled } from "@/lib/features/jornada-only";
@@ -204,22 +217,73 @@ export function AppShell({
           ))}
         </SidebarContent>
         <SidebarFooter>
-          <div className="flex items-center gap-3 rounded-lg p-2 group-data-[collapsible=icon]:justify-center">
-            <Avatar className="size-8">
-              <AvatarFallback>{initials}</AvatarFallback>
-            </Avatar>
-            <div className="min-w-0 group-data-[collapsible=icon]:hidden">
-              <p className="truncate text-sm font-medium">{user.name}</p>
-              <p className="truncate text-xs text-muted-foreground">
-                {user.email}
-              </p>
-            </div>
-          </div>
-          <form action="/auth/sign-out" method="post" className="px-2 pb-2 group-data-[collapsible=icon]:hidden">
-            <button className="text-xs text-muted-foreground hover:text-foreground" type="submit">
-              Sair da conta
-            </button>
-          </form>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <DropdownMenu>
+                <DropdownMenuTrigger
+                  render={<SidebarMenuButton size="lg" tooltip="Conta" />}
+                >
+                  <Avatar className="size-8">
+                    <AvatarFallback>{initials}</AvatarFallback>
+                  </Avatar>
+                  <div className="min-w-0 group-data-[collapsible=icon]:hidden">
+                    <p className="truncate font-medium">{user.name}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {user.email}
+                    </p>
+                  </div>
+                  <HugeiconsIcon
+                    icon={ArrowDown01Icon}
+                    className="ml-auto group-data-[collapsible=icon]:hidden"
+                  />
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="right" align="end" className="w-64">
+                  <DropdownMenuLabel>
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Avatar className="size-8">
+                        <AvatarFallback>{initials}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">
+                          {user.name}
+                        </p>
+                        <p className="truncate text-xs font-normal">
+                          {user.email}
+                        </p>
+                      </div>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuGroup>
+                    <DropdownMenuItem
+                      render={<Link href="/gestec_help_desk/minha-caixa" />}
+                    >
+                      <HugeiconsIcon icon={Notification01Icon} />
+                      Notificações
+                    </DropdownMenuItem>
+                    {hasPermission(user.role, "admin:manage") ? (
+                      <DropdownMenuItem
+                        render={<Link href="/gestec_help_desk/admin" />}
+                      >
+                        <HugeiconsIcon icon={AccountSetting01Icon} />
+                        Administração
+                      </DropdownMenuItem>
+                    ) : null}
+                  </DropdownMenuGroup>
+                  <DropdownMenuSeparator />
+                  <form action="/auth/sign-out" method="post">
+                    <DropdownMenuItem
+                      render={<button type="submit" />}
+                      variant="destructive"
+                    >
+                      <HugeiconsIcon icon={Logout01Icon} />
+                      Sair da conta
+                    </DropdownMenuItem>
+                  </form>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </SidebarMenuItem>
+          </SidebarMenu>
         </SidebarFooter>
         <SidebarRail />
       </Sidebar>

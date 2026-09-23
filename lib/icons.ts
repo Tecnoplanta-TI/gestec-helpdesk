@@ -1,4 +1,5 @@
 export { default as Add01Icon } from "@hugeicons/core-free-icons/Add01Icon";
+export { default as AccountSetting01Icon } from "@hugeicons/core-free-icons/AccountSetting01Icon";
 export { default as Alert02Icon } from "@hugeicons/core-free-icons/Alert02Icon";
 export { default as ArrowDown01Icon } from "@hugeicons/core-free-icons/ArrowDown01Icon";
 export { default as ArrowDownIcon } from "@hugeicons/core-free-icons/ArrowDown01Icon";
@@ -21,6 +22,7 @@ export { default as KanbanIcon } from "@hugeicons/core-free-icons/KanbanIcon";
 export { default as Loading03Icon } from "@hugeicons/core-free-icons/Loading03Icon";
 export { default as MoreHorizontalCircle01Icon } from "@hugeicons/core-free-icons/MoreHorizontalCircle01Icon";
 export { default as MoreVerticalIcon } from "@hugeicons/core-free-icons/MoreVerticalIcon";
+export { default as Notification01Icon } from "@hugeicons/core-free-icons/Notification01Icon";
 export { default as MultiplicationSignCircleIcon } from "@hugeicons/core-free-icons/MultiplicationSignCircleIcon";
 export { default as PlayIcon } from "@hugeicons/core-free-icons/PlayIcon";
 export { default as SearchIcon } from "@hugeicons/core-free-icons/Search01Icon";
@@ -28,6 +30,7 @@ export { default as DashboardSquare01Icon } from "@hugeicons/core-free-icons/Das
 export { default as Settings02Icon } from "@hugeicons/core-free-icons/Settings02Icon";
 export { default as SidebarLeftIcon } from "@hugeicons/core-free-icons/SidebarLeftIcon";
 export { default as StopIcon } from "@hugeicons/core-free-icons/StopIcon";
+export { default as Logout01Icon } from "@hugeicons/core-free-icons/Logout01Icon";
 export { default as Tick02Icon } from "@hugeicons/core-free-icons/Tick02Icon";
 export { default as Ticket01Icon } from "@hugeicons/core-free-icons/Ticket01Icon";
 export { default as UnfoldMoreIcon } from "@hugeicons/core-free-icons/UnfoldMoreIcon";
