@@ -323,17 +323,6 @@ export default async function ReportsPage({
               label: userLabel(user),
             }))}
           />
-          <Button
-            render={
-              <a
-                href={`/api/v1/gestec-help-desk/reports/time-entries.xlsx?${reportParams.toString()}`}
-                download
-              />
-            }
-          >
-            <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />
-            Exportar (.xlsx)
-          </Button>
         </div>
       </div>
       <p className="text-sm text-muted-foreground">
