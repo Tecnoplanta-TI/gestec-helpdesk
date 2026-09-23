@@ -20,6 +20,9 @@
 
 # production
 /build
+/release/
+/release-*/
+/gestec-helpdesk-*.tar.gz
 
 # misc
 .DS_Store
