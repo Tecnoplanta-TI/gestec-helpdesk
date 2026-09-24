@@ -472,7 +472,7 @@ export function TimeWorkspace({
       ) : null}
 
       <div className="rounded-2xl border border-foreground/15 bg-card p-3 md:p-4">
-        <div className="grid items-center gap-3 xl:grid-cols-[minmax(18rem,1fr)_auto_auto_auto_auto]">
+        <div className="grid items-center gap-3 xl:grid-cols-[minmax(18rem,1fr)_auto_auto_auto_auto_auto]">
           <Input
             value={description}
             onChange={(event) => setDescription(event.target.value)}
