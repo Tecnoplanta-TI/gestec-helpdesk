@@ -582,6 +582,67 @@ export const adminTimeEntryUpdateSchema = z
     },
   );
 
+const adminTimeEntryBulkTargetSchema = z
+  .object({
+    id: uuid,
+    version: z.number().int().positive(),
+    startedAt: z.coerce.date().optional(),
+    endedAt: z.coerce.date().optional(),
+  })
+  .refine(
+    ({ startedAt, endedAt }) =>
+      (startedAt === undefined && endedAt === undefined) ||
+      (startedAt !== undefined && endedAt !== undefined && endedAt > startedAt),
+    { message: "Informe um intervalo válido para cada apontamento." },
+  );
+
+export const adminTimeEntryBulkUpdateSchema = z
+  .object({
+    entries: z.array(adminTimeEntryBulkTargetSchema).min(1).max(100),
+    userId: uuid.optional(),
+    description: z.string().trim().min(1).max(500).optional(),
+    projectId: z
+      .string()
+      .regex(/^(cost-center|manual):[0-9a-f-]{36}$/i)
+      .optional(),
+    billable: z.boolean().optional(),
+    correctionReason: z.string().trim().min(3).max(1000),
+  })
+  .refine(
+    ({ entries, userId, description, projectId, billable }) =>
+      userId !== undefined ||
+      description !== undefined ||
+      projectId !== undefined ||
+      billable !== undefined ||
+      entries.some((entry) => entry.startedAt !== undefined),
+    { message: "Informe ao menos um campo para alterar." },
+  )
+  .refine(
+    ({ entries }) =>
+      new Set(entries.map((entry) => entry.id)).size === entries.length,
+    { path: ["entries"], message: "A lista contém apontamentos repetidos." },
+  );
+
+export const adminTimeEntryBulkDeleteSchema = z
+  .object({
+    entries: z.array(adminTimeEntryBulkTargetSchema).min(1).max(100),
+    correctionReason: z.string().trim().min(3).max(1000),
+  })
+  .refine(
+    ({ entries }) =>
+      new Set(entries.map((entry) => entry.id)).size === entries.length,
+    { path: ["entries"], message: "A lista contém apontamentos repetidos." },
+  );
+
+export const adminTimeEntryDeleteSchema = z.object({
+  version: z.number().int().positive(),
+  correctionReason: z.string().trim().min(3).max(1000),
+});
+
+export const adminTimeEntryDuplicateSchema = z.object({
+  version: z.number().int().positive(),
+});
+
 export const adminTicketCreateSchema = z.object({
   title: z.string().trim().min(1).max(500),
   description: z.string().trim().min(1).max(20_000),

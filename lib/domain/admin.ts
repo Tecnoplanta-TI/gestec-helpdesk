@@ -9,6 +9,7 @@ import {
 
 import { auditSnapshot } from "@/lib/domain/audit";
 import { getProjectAny } from "@/lib/domain/projects";
+import { findProjectHourlyRateCents } from "@/lib/domain/project-rates";
 import { normalizeRequestType } from "@/lib/domain/request-types";
 import { ticketClassificationFields } from "@/lib/domain/ticket-classification";
 import { ticketInclude } from "@/lib/domain/tickets";
@@ -16,6 +17,9 @@ import type {
   adminTicketCreateSchema,
   adminTicketUpdateSchema,
   adminTimeEntryCreateSchema,
+  adminTimeEntryBulkDeleteSchema,
+  adminTimeEntryBulkUpdateSchema,
+  adminTimeEntryDuplicateSchema,
   adminTimeEntryUpdateSchema,
   adminUserSchema,
   adminUserUpdateSchema,
@@ -29,6 +33,9 @@ type AdminUserUpdate = z.infer<typeof adminUserUpdateSchema>;
 type AdminTicketCreate = z.infer<typeof adminTicketCreateSchema>;
 type AdminTicketUpdate = z.infer<typeof adminTicketUpdateSchema>;
 type AdminTimeEntryCreate = z.infer<typeof adminTimeEntryCreateSchema>;
+type AdminTimeEntryBulkUpdate = z.infer<typeof adminTimeEntryBulkUpdateSchema>;
+type AdminTimeEntryBulkDelete = z.infer<typeof adminTimeEntryBulkDeleteSchema>;
+type AdminTimeEntryDuplicate = z.infer<typeof adminTimeEntryDuplicateSchema>;
 type AdminTimeEntryUpdate = z.infer<typeof adminTimeEntryUpdateSchema>;
 
 async function assertUserExists(tx: Prisma.TransactionClient, id: string) {
@@ -620,6 +627,235 @@ export async function updateAdminTimeEntry(input: {
       },
     });
     return after;
+  });
+}
+
+export async function updateAdminTimeEntriesBulk(input: {
+  actorId: string;
+  data: AdminTimeEntryBulkUpdate;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const ids = input.data.entries.map((entry) => entry.id);
+    const currentEntries = await tx.timeEntry.findMany({
+      where: { id: { in: ids } },
+    });
+    if (currentEntries.length !== ids.length) {
+      throw new ApiError(
+        404,
+        "TIME_ENTRY_NOT_FOUND",
+        "Um ou mais apontamentos não foram encontrados.",
+      );
+    }
+    const targets = new Map(
+      input.data.entries.map((entry) => [entry.id, entry]),
+    );
+    for (const entry of currentEntries) {
+      if (entry.version !== targets.get(entry.id)?.version) {
+        throw new ApiError(
+          409,
+          "VERSION_CONFLICT",
+          "Um apontamento selecionado foi alterado. Atualize a página e tente novamente.",
+        );
+      }
+      if (entry.status === TimeEntryStatus.VOIDED) {
+        throw new ApiError(
+          409,
+          "TIME_ENTRY_VOIDED",
+          "Apontamentos invalidados não podem ser editados em massa.",
+        );
+      }
+    }
+    if (input.data.userId) await assertUserExists(tx, input.data.userId);
+    const project = input.data.projectId
+      ? await getProjectAny(input.data.projectId, tx)
+      : null;
+
+    for (const current of currentEntries) {
+      const target = targets.get(current.id);
+      const startedAt = target?.startedAt ?? current.startedAt;
+      const endedAt = target?.endedAt ?? current.endedAt;
+      const changesTime = target?.startedAt !== undefined;
+      const durationSeconds = changesTime
+        ? Math.floor((endedAt.getTime() - startedAt.getTime()) / 1000)
+        : current.durationSeconds;
+      if (changesTime && (durationSeconds <= 0 || durationSeconds > 86_400)) {
+        throw new ApiError(
+          422,
+          "INVALID_DURATION",
+          "A duração deve ser maior que zero e de no máximo 24 horas.",
+        );
+      }
+      const hourlyRateCentsSnapshot =
+        project?.kind === "MANUAL"
+          ? await findProjectHourlyRateCents(tx, project.id, startedAt)
+          : project
+            ? null
+            : undefined;
+      const result = await tx.timeEntry.updateMany({
+        where: { id: current.id, version: current.version },
+        data: {
+          userId: input.data.userId,
+          description: input.data.description,
+          billable: input.data.billable,
+          startedAt: target?.startedAt,
+          endedAt: target?.endedAt,
+          durationSeconds: changesTime ? durationSeconds : undefined,
+          correctionReason: input.data.correctionReason,
+          hourlyRateCentsSnapshot,
+          ...(project
+            ? {
+                costCenterId:
+                  project.kind === "COST_CENTER" ? project.id : null,
+                manualProjectId: project.kind === "MANUAL" ? project.id : null,
+                projectNameSnapshot: project.name,
+              }
+            : {}),
+          version: { increment: 1 },
+        },
+      });
+      if (result.count !== 1) {
+        throw new ApiError(
+          409,
+          "VERSION_CONFLICT",
+          "Um apontamento foi alterado durante a operação. Nenhuma alteração foi aplicada.",
+        );
+      }
+      const after = await tx.timeEntry.findUniqueOrThrow({
+        where: { id: current.id },
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorId: input.actorId,
+          action: "ADMIN_TIME_ENTRY_BULK_UPDATED",
+          entityType: "TimeEntry",
+          entityId: current.id,
+          before: auditSnapshot(current),
+          after: auditSnapshot(after),
+        },
+      });
+    }
+    return { updated: currentEntries.length };
+  });
+}
+
+export async function duplicateAdminTimeEntry(input: {
+  id: string;
+  actorId: string;
+  data: AdminTimeEntryDuplicate;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const current = await tx.timeEntry.findUnique({ where: { id: input.id } });
+    if (!current) {
+      throw new ApiError(
+        404,
+        "TIME_ENTRY_NOT_FOUND",
+        "Apontamento não encontrado.",
+      );
+    }
+    if (current.version !== input.data.version) {
+      throw new ApiError(
+        409,
+        "VERSION_CONFLICT",
+        "O apontamento foi alterado. Atualize a página e tente novamente.",
+      );
+    }
+    const created = await tx.timeEntry.create({
+      data: {
+        userId: current.userId,
+        ticketId: current.ticketId,
+        costCenterId: current.costCenterId,
+        manualProjectId: current.manualProjectId,
+        source: current.source,
+        status: TimeEntryStatus.VALID,
+        description: current.description,
+        startedAt: current.startedAt,
+        endedAt: current.endedAt,
+        durationSeconds: current.durationSeconds,
+        hourlyRateCentsSnapshot: current.hourlyRateCentsSnapshot,
+        billable: current.billable,
+        projectNameSnapshot: current.projectNameSnapshot,
+        ticketNumberSnapshot: current.ticketNumberSnapshot,
+        idempotencyKey: `admin:duplicate:${randomUUID()}`,
+      },
+    });
+    await tx.auditEvent.create({
+      data: {
+        actorId: input.actorId,
+        action: "ADMIN_TIME_ENTRY_DUPLICATED",
+        entityType: "TimeEntry",
+        entityId: created.id,
+        before: auditSnapshot(current),
+        after: auditSnapshot(created),
+      },
+    });
+    return created;
+  });
+}
+
+export async function deleteAdminTimeEntriesBulk(input: {
+  actorId: string;
+  data: AdminTimeEntryBulkDelete;
+}) {
+  return prisma.$transaction(async (tx) => {
+    const ids = input.data.entries.map((entry) => entry.id);
+    const currentEntries = await tx.timeEntry.findMany({
+      where: { id: { in: ids } },
+    });
+    if (currentEntries.length !== ids.length) {
+      throw new ApiError(
+        404,
+        "TIME_ENTRY_NOT_FOUND",
+        "Um ou mais apontamentos não foram encontrados.",
+      );
+    }
+    const versions = new Map(
+      input.data.entries.map((entry) => [entry.id, entry.version]),
+    );
+    const entriesToVoid = currentEntries.filter(
+      (entry) => entry.status !== TimeEntryStatus.VOIDED,
+    );
+    for (const entry of entriesToVoid) {
+      if (entry.version !== versions.get(entry.id)) {
+        throw new ApiError(
+          409,
+          "VERSION_CONFLICT",
+          "Um apontamento selecionado foi alterado. Atualize a página e tente novamente.",
+        );
+      }
+    }
+
+    for (const current of entriesToVoid) {
+      const result = await tx.timeEntry.updateMany({
+        where: { id: current.id, version: current.version },
+        data: {
+          status: TimeEntryStatus.VOIDED,
+          billable: false,
+          correctionReason: input.data.correctionReason,
+          version: { increment: 1 },
+        },
+      });
+      if (result.count !== 1) {
+        throw new ApiError(
+          409,
+          "VERSION_CONFLICT",
+          "Um apontamento foi alterado durante a operação. Nenhuma alteração foi aplicada.",
+        );
+      }
+      const after = await tx.timeEntry.findUniqueOrThrow({
+        where: { id: current.id },
+      });
+      await tx.auditEvent.create({
+        data: {
+          actorId: input.actorId,
+          action: "ADMIN_TIME_ENTRY_VOIDED",
+          entityType: "TimeEntry",
+          entityId: current.id,
+          before: auditSnapshot(current),
+          after: auditSnapshot(after),
+        },
+      });
+    }
+    return { voided: entriesToVoid.length };
   });
 }
 
