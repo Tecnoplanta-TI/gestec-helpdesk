@@ -30,6 +30,12 @@ export function reportFilters(searchParams: URLSearchParams, now = new Date()) {
       "INVALID_PERIOD",
       "A data inicial deve ser anterior à data final.",
     );
+  if (to.getTime() - from.getTime() > 366 * 86_400_000)
+    throw new ApiError(
+      422,
+      "PERIOD_TOO_LONG",
+      "O período do relatório não pode passar de 366 dias.",
+    );
 
   const projectValue = searchParams.get("project")?.trim() ?? "";
   const project = PROJECT_ID.exec(projectValue);
@@ -63,7 +69,7 @@ export function reportFilters(searchParams: URLSearchParams, now = new Date()) {
   const searchByTicketNumber =
     Number.isInteger(ticketNumber) && ticketNumber > 0;
   const userId = searchParams.get("userId")?.trim();
-  if (userId && !UUID.test(userId))
+  if (userId && userId !== "all" && !UUID.test(userId))
     throw new ApiError(
       422,
       "INVALID_USER",
@@ -83,7 +89,7 @@ export function reportFilters(searchParams: URLSearchParams, now = new Date()) {
     ...(manualProjectId ? { manualProjectId } : {}),
     ...(billableValue === "billable" ? { billable: true } : {}),
     ...(billableValue === "non-billable" ? { billable: false } : {}),
-    ...(userId ? { userId } : {}),
+    ...(userId && userId !== "all" ? { userId } : {}),
     ...(ticket
       ? {
           OR: [
@@ -110,7 +116,7 @@ export function reportFilters(searchParams: URLSearchParams, now = new Date()) {
     where,
     costCenterId,
     manualProjectId,
-    userId: userId || "",
+    userId: userId && userId !== "all" ? userId : "",
   };
 }
 

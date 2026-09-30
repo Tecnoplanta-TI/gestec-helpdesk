@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { Login02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@/components/icon";
+import { Login02Icon } from "@/lib/icons";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -50,7 +50,7 @@ export function LoginForm() {
           <Input id="password" type="password" autoComplete="current-password" required value={password} onChange={(event) => setPassword(event.target.value)} />
         </Field>
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
-        <Button className="w-full" size="lg" disabled={submitting} type="submit">
+        <Button className="w-full sm:w-auto" size="lg" disabled={submitting} type="submit">
           <HugeiconsIcon icon={Login02Icon} />
           {submitting ? "Entrando..." : "Entrar"}
         </Button>

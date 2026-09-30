@@ -67,8 +67,8 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
    primeiro usuário no painel do Supabase. Copie a URL do projeto e a chave
    pública em **Connect/API** para `NEXT_PUBLIC_SUPABASE_URL` e
    `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`. A variável
-   `SUPABASE_ADMIN_EMAILS` já contém os dois únicos e-mails que podem receber
-   **ADMIN** no primeiro login. Os demais usuários iniciam como **TECHNICIAN**.
+   `SUPABASE_ADMIN_EMAILS` não cria usuário nem altera um papel já gravado.
+   Quem não está em Admin → Usuários recebe 403 e nenhum cadastro é criado.
 5. Para executar a migração a partir de uma máquina confiável, defina as duas
    URLs do Supabase naquela sessão e execute somente:
 
@@ -99,13 +99,20 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
    também as duas variáveis públicas do Supabase e
    `SUPABASE_ADMIN_EMAILS`. Não use nem publique a `service_role` no
    navegador ou no arquivo de ambiente do Help Desk.
-4. Mantenha `ZEEV_SYNC_ENABLED=false`. Os valores `ZEEV_*` não precisam ser
+4. Em **Authentication > Email Templates**, configure os links de redefinição
+   e convite para apontarem diretamente ao endpoint do app usando
+   `{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery` ou
+   `type=invite`, respectivamente. Não use `{{ .ConfirmationURL }}` nesses
+   templates: filtros de e-mail podem abrir o link automaticamente e consumir
+   o token de uso único antes da pessoa clicar. O app pede uma confirmação e
+   só valida o token após o clique.
+5. Mantenha `ZEEV_SYNC_ENABLED=false`. Os valores `ZEEV_*` não precisam ser
    preenchidos nesta publicação: o app não cria worker e os endpoints Zeev
    respondem como indisponíveis.
-5. Garanta uma pasta persistente, por exemplo
+6. Garanta uma pasta persistente, por exemplo
    `/var/lib/gestec-helpdesk/storage`, para anexos. A imagem nunca armazena
    anexos somente na camada temporária do container.
-6. Construa e inicie o serviço. O Compose interrompe o build caso as duas
+7. Construa e inicie o serviço. O Compose interrompe o build caso as duas
    variáveis públicas do Supabase não tenham sido preenchidas:
 
    ```bash
@@ -129,10 +136,10 @@ o escopo ter sido confirmado e as contagens terem sido registradas.
    O arquivo `deploy/.env.production` configura
    `GESTEC_BUILD_NODE_HEAP_MB=1536`, usado somente para montar a imagem.
 
-7. Configure Nginx com base em `deploy/nginx/helpdesk.conf.example`, substitua
+8. Configure Nginx com base em `deploy/nginx/helpdesk.conf.example`, substitua
    o domínio e habilite HTTPS antes de expor o endereço. O container fica
    ligado apenas a `127.0.0.1`; Nginx é o único ponto público.
-8. Não configure callbacks no Gestec nem no Zeev nesta publicação. Valide
+9. Não configure callbacks no Gestec nem no Zeev nesta publicação. Valide
    apenas login, Jornada e Relatórios.
 
 ## 5. Critérios de aceite

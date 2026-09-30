@@ -1,4 +1,5 @@
 import { requirePermission } from "@/lib/auth/session";
+import { withTicketVisibility } from "@/lib/auth/ticket-access";
 import {
   parseTicketFilters,
   ticketSearchWhere,
@@ -8,7 +9,7 @@ import { prisma } from "@/lib/prisma";
 
 export async function GET(request: Request) {
   try {
-    await requirePermission("tickets:view");
+    const session = await requirePermission("tickets:view");
     const { searchParams } = new URL(request.url);
     const filters = parseTicketFilters(
       Object.fromEntries(searchParams.entries()),
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
     const pageSize = Number.isSafeInteger(requestedPageSize)
       ? Math.min(100, Math.max(1, requestedPageSize))
       : filters.pageSize;
-    const where = ticketSearchWhere(filters);
+    const where = withTicketVisibility(ticketSearchWhere(filters), session);
     const [items, total] = await Promise.all([
       prisma.ticket.findMany({
         where,

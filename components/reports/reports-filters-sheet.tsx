@@ -33,7 +33,8 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { FilterIcon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { displayPersonName } from "@/lib/format";
+import { HugeiconsIcon } from "@/components/icon";
 
 export type ReportFilters = {
   from: string;
@@ -76,6 +77,22 @@ export function ReportsFiltersSheet({
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState(filters);
+  const costCenterItems = [{ value: "all", label: "Todos" }, ...costCenters];
+  const projectItems = [{ value: "all", label: "Todos" }, ...projects];
+  const billableItems = [
+    { value: "all", label: "Todas" },
+    { value: "billable", label: "Faturável" },
+    { value: "non-billable", label: "Não faturável" },
+  ];
+  const userItems = [
+    { value: "all", label: "Todos os usuários" },
+    ...users.map((user) => ({
+      value: user.value,
+      label: displayPersonName(
+        typeof user.label === "string" ? user.label : undefined,
+      ),
+    })),
+  ];
 
   function openSheet(next: boolean) {
     if (next) setDraft(filters);
@@ -89,7 +106,9 @@ export function ReportsFiltersSheet({
       params.set("manualProject", draft.manualProject);
     }
     if (draft.billable !== "all") params.set("billable", draft.billable);
-    if (draft.userId !== "all") params.set("userId", draft.userId);
+    // `all` must remain explicit: an omitted userId means the report's
+    // default scope (the signed-in user).
+    params.set("userId", draft.userId);
     if (draft.ticket.trim()) params.set("ticket", draft.ticket.trim());
     router.push(`${pathname}?${params.toString()}`);
     setOpen(false);
@@ -108,7 +127,7 @@ export function ReportsFiltersSheet({
       from: cleared.from,
       to: cleared.to,
     });
-    if (cleared.userId !== "all") params.set("userId", cleared.userId);
+    params.set("userId", cleared.userId);
     router.push(`${pathname}?${params.toString()}`);
     setOpen(false);
   }
@@ -128,7 +147,7 @@ export function ReportsFiltersSheet({
             Escolha o período e os critérios dos apontamentos exibidos.
           </SheetDescription>
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto px-6">
+        <div className="flex-1 overflow-y-auto px-6 [scrollbar-width:thin]">
           <FieldGroup>
             <Field>
               <FieldLabel>Período</FieldLabel>
@@ -169,6 +188,7 @@ export function ReportsFiltersSheet({
             <Field>
               <FieldLabel>Centro de custo</FieldLabel>
               <Select
+                items={costCenterItems}
                 value={draft.costCenter}
                 onValueChange={(value) =>
                   setDraft((current) => ({
@@ -182,8 +202,7 @@ export function ReportsFiltersSheet({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {costCenters.map((item) => (
+                    {costCenterItems.map((item) => (
                       <SelectItem key={item.value} value={item.value}>
                         {item.label}
                       </SelectItem>
@@ -195,6 +214,7 @@ export function ReportsFiltersSheet({
             <Field>
               <FieldLabel>Projeto Semear</FieldLabel>
               <Select
+                items={projectItems}
                 value={draft.manualProject}
                 onValueChange={(value) =>
                   setDraft((current) => ({
@@ -208,8 +228,7 @@ export function ReportsFiltersSheet({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">Todos</SelectItem>
-                    {projects.map((item) => (
+                    {projectItems.map((item) => (
                       <SelectItem key={item.value} value={item.value}>
                         {item.label}
                       </SelectItem>
@@ -221,6 +240,7 @@ export function ReportsFiltersSheet({
             <Field>
               <FieldLabel>Faturabilidade</FieldLabel>
               <Select
+                items={billableItems}
                 value={draft.billable}
                 onValueChange={(value) =>
                   setDraft((current) => ({
@@ -234,9 +254,11 @@ export function ReportsFiltersSheet({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">Todas</SelectItem>
-                    <SelectItem value="billable">Faturável</SelectItem>
-                    <SelectItem value="non-billable">Não faturável</SelectItem>
+                    {billableItems.map((item) => (
+                      <SelectItem key={item.value} value={item.value}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
@@ -244,6 +266,7 @@ export function ReportsFiltersSheet({
             <Field>
               <FieldLabel>Usuário</FieldLabel>
               <Select
+                items={userItems}
                 value={draft.userId}
                 onValueChange={(value) =>
                   setDraft((current) => ({
@@ -257,8 +280,7 @@ export function ReportsFiltersSheet({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    <SelectItem value="all">Todos os usuários</SelectItem>
-                    {users.map((item) => (
+                    {userItems.map((item) => (
                       <SelectItem key={item.value} value={item.value}>
                         {item.label}
                       </SelectItem>

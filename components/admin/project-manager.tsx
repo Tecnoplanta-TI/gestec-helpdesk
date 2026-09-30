@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateField } from "@/components/date-field";
 import {
   Field,
   FieldDescription,
@@ -40,7 +41,8 @@ import {
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
 import { CreateProjectDialog } from "@/components/time/create-project-dialog";
 import { Add01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
+import { Pencil, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/http/client";
 import {
   currentLocalDateValue,
@@ -179,12 +181,10 @@ export function AdminProjectManager({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Projetos Semear
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Projetos</h1>
           <p className="text-sm text-muted-foreground">
-            Projetos do programa Semear. Clientes são administrados em seu
-            próprio cadastro.
+            Cadastro de projetos. Clientes são administrados em seu próprio
+            cadastro.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -199,7 +199,7 @@ export function AdminProjectManager({
           <EmptyHeader>
             <EmptyTitle>Nenhum projeto cadastrado</EmptyTitle>
             <EmptyDescription>
-              Crie um projeto Semear para começar.
+              Crie um projeto para começar.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -252,20 +252,22 @@ export function AdminProjectManager({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-1">
                       <Button
-                        variant="outline"
-                        size="sm"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Editar"
                         onClick={() => openEditor(project)}
                       >
-                        Editar
+                        <Pencil />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        aria-label="Excluir"
                         onClick={() => setDeleting(project)}
                       >
-                        Excluir
+                        <Trash2 />
                       </Button>
                     </div>
                   </TableCell>
@@ -287,10 +289,10 @@ export function AdminProjectManager({
             <SheetTitle>Editar projeto</SheetTitle>
             <SheetDescription>
               Altere o nome, valor-hora, vigência, visibilidade, faturabilidade
-              padrão e o rateio por centro de custo do projeto Semear.
+              padrão e o rateio por centro de custo do projeto.
             </SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-6">
+          <div className="flex-1 overflow-y-auto px-6 [scrollbar-width:thin]">
             <FieldGroup>
               <Field>
                 <FieldLabel>Código</FieldLabel>
@@ -340,17 +342,16 @@ export function AdminProjectManager({
                   <FieldLabel htmlFor="admin-project-rate-effective-from">
                     Válido a partir de
                   </FieldLabel>
-                  <Input
+                  <DateField
                     id="admin-project-rate-effective-from"
-                    type="date"
                     value={form.hourlyRateEffectiveFrom}
                     min={nextHourlyRateEffectiveFrom(
                       editing?.latestHourlyRateEffectiveFrom ?? null,
                     )}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        hourlyRateEffectiveFrom: event.target.value,
+                        hourlyRateEffectiveFrom: value,
                       }))
                     }
                   />

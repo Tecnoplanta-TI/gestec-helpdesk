@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ import {
 import { Add01Icon } from "@/lib/icons";
 import { apiRequest } from "@/lib/http/client";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
+import { Pencil, Trash2 } from "lucide-react";
 
 type CostCenter = {
   id: string;
@@ -156,7 +157,7 @@ export function CostCenterManager({
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Clientes</h1>
           <p className="text-sm text-muted-foreground">
-            Cadastre os clientes e seus centros de custo. Projetos Semear são
+            Cadastre os clientes e seus centros de custo. Projetos são
             administrados separadamente.
           </p>
         </div>
@@ -196,20 +197,22 @@ export function CostCenterManager({
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
+                            aria-label="Editar"
                             onClick={() => startEdit(item)}
                           >
-                            Editar
+                            <Pencil />
                           </Button>
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
+                            aria-label="Excluir"
                             onClick={() => setDeleting(item)}
                           >
-                            Excluir
+                            <Trash2 />
                           </Button>
                           <Switch
                             checked={item.active}

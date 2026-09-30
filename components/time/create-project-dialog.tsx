@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { DateField } from "@/components/date-field";
 import {
   Field,
   FieldDescription,
@@ -24,7 +25,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Add01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { apiRequest } from "@/lib/http/client";
 import { currentLocalDateValue } from "@/lib/format";
 import type { TimeProject } from "@/components/time/project-combobox";
@@ -142,14 +143,14 @@ export function CreateProjectDialog({
           <HugeiconsIcon icon={Add01Icon} />
         </DialogTrigger>
       ) : null}
-      <DialogContent className="max-h-[min(90vh,48rem)] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle>Criar projeto</DialogTitle>
           <DialogDescription>
-            Cadastre um projeto do programa Semear. Clientes são mantidos em um
-            cadastro separado.
+            Cadastre um projeto. Clientes são mantidos em um cadastro separado.
           </DialogDescription>
         </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 [scrollbar-width:thin]">
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="project-name">Nome do projeto</FieldLabel>
@@ -181,13 +182,10 @@ export function CreateProjectDialog({
               <FieldLabel htmlFor="project-rate-effective-from">
                 Válido a partir de
               </FieldLabel>
-              <Input
+              <DateField
                 id="project-rate-effective-from"
-                type="date"
                 value={hourlyRateEffectiveFrom}
-                onChange={(event) =>
-                  setHourlyRateEffectiveFrom(event.target.value)
-                }
+                onChange={setHourlyRateEffectiveFrom}
               />
             </Field>
           ) : null}
@@ -245,7 +243,8 @@ export function CreateProjectDialog({
           </label>
           <ProjectRateioFields shares={rateio} onChange={setRateio} />
         </FieldGroup>
-        <DialogFooter>
+        </div>
+        <DialogFooter className="border-t px-6 py-4">
           <DialogClose render={<Button variant="outline" disabled={pending} />}>
             Cancelar
           </DialogClose>

@@ -556,6 +556,12 @@ export const adminTicketUpdateSchema = z.object({
   version: z.number().int().positive(),
 });
 
+export const optionalCorrectionReasonSchema = z.preprocess(
+  (value) =>
+    typeof value === "string" && value.trim() === "" ? undefined : value,
+  z.string().trim().min(3).max(1000).optional(),
+);
+
 export const adminTimeEntryUpdateSchema = z
   .object({
     userId: uuid.optional(),
@@ -570,7 +576,7 @@ export const adminTimeEntryUpdateSchema = z
     endedAt: z.coerce.date().optional(),
     status: z.nativeEnum(TimeEntryStatus).optional(),
     source: z.nativeEnum(TimeEntrySource).optional(),
-    correctionReason: z.string().trim().min(3).max(1000),
+    correctionReason: optionalCorrectionReasonSchema,
     version: z.number().int().positive(),
   })
   .refine(
@@ -606,7 +612,7 @@ export const adminTimeEntryBulkUpdateSchema = z
       .regex(/^(cost-center|manual):[0-9a-f-]{36}$/i)
       .optional(),
     billable: z.boolean().optional(),
-    correctionReason: z.string().trim().min(3).max(1000),
+    correctionReason: optionalCorrectionReasonSchema,
   })
   .refine(
     ({ entries, userId, description, projectId, billable }) =>

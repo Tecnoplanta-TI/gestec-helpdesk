@@ -1,4 +1,5 @@
 import { requirePermission } from "@/lib/auth/session";
+import { assertTicketVisible } from "@/lib/auth/ticket-access";
 import { retryTicketZeevSync } from "@/lib/domain/tickets";
 import { errorResponse } from "@/lib/http/api-error";
 
@@ -7,8 +8,9 @@ export async function POST(
   context: { params: Promise<{ id: string; executionId: string }> },
 ) {
   try {
-    await requirePermission("tickets:manage");
+    const session = await requirePermission("tickets:manage");
     const { id, executionId } = await context.params;
+    await assertTicketVisible(session, id);
     const execution = await retryTicketZeevSync({
       ticketId: id,
       executionId,

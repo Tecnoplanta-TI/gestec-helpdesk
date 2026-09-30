@@ -16,7 +16,8 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { UnfoldMoreIcon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
+import { rankProjectQuery } from "@/lib/domain/project-search";
 import { cn } from "@/lib/utils";
 
 export type TimeProject = {
@@ -40,6 +41,31 @@ function isCostCenter(project: TimeProject) {
   );
 }
 
+function projectSearchValue(project: TimeProject) {
+  return `${project.name} ${project.code ?? ""} ${project.id}`;
+}
+
+function projectKeywords(project: TimeProject) {
+  return [project.name, project.code ?? ""];
+}
+
+function sortProjectsByQuery(projects: TimeProject[], query: string) {
+  if (!query.trim()) return projects;
+  return [...projects].sort(
+    (left, right) =>
+      rankProjectQuery(
+        query,
+        projectSearchValue(right),
+        projectKeywords(right),
+      ) -
+      rankProjectQuery(
+        query,
+        projectSearchValue(left),
+        projectKeywords(left),
+      ),
+  );
+}
+
 export function ProjectCombobox({
   projects,
   recentProjectIds,
@@ -58,6 +84,7 @@ export function ProjectCombobox({
   onChange: (projectId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const selected = projects.find((project) => project.id === value);
   const recent = useMemo(() => {
     const byId = new Map(projects.map((project) => [project.id, project]));
@@ -70,6 +97,18 @@ export function ProjectCombobox({
     const recentIds = new Set(recent.map((project) => project.id));
     return projects.filter((project) => !recentIds.has(project.id));
   }, [projects, recent]);
+  const rankedRecent = useMemo(
+    () => sortProjectsByQuery(recent, search),
+    [recent, search],
+  );
+  const rankedRemaining = useMemo(
+    () => sortProjectsByQuery(remaining, search),
+    [remaining, search],
+  );
+  const rankedProjects = useMemo(
+    () => sortProjectsByQuery(projects, search),
+    [projects, search],
+  );
 
   function select(projectId: string) {
     onChange(projectId);
@@ -77,7 +116,13 @@ export function ProjectCombobox({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setSearch("");
+      }}
+    >
       <PopoverTrigger
         disabled={disabled}
         render={
@@ -104,8 +149,16 @@ export function ProjectCombobox({
         align="start"
         className="w-80 gap-0 overflow-hidden p-0"
       >
-        <Command>
-          <CommandInput placeholder="Buscar por nome ou código" />
+        <Command
+          filter={(value, query, keywords) =>
+            rankProjectQuery(query, value, keywords)
+          }
+        >
+          <CommandInput
+            placeholder="Buscar por nome ou código"
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
             <CommandEmpty>
               Nenhum centro de custo ou projeto encontrado.
@@ -117,12 +170,13 @@ export function ProjectCombobox({
                 </CommandItem>
               </CommandGroup>
             ) : null}
-            {recent.length > 0 ? (
+            {rankedRecent.length > 0 ? (
               <CommandGroup heading="Recentes">
-                {recent.map((project) => (
+                {rankedRecent.map((project) => (
                   <CommandItem
                     key={`recent-${project.id}`}
-                    value={`recentes ${project.name} ${project.code ?? ""} ${project.id}`}
+                    value={projectSearchValue(project)}
+                    keywords={projectKeywords(project)}
                     data-checked={value === project.id || undefined}
                     onSelect={() => select(project.id)}
                   >
@@ -132,11 +186,11 @@ export function ProjectCombobox({
               </CommandGroup>
             ) : null}
             {(["cost-center", "manual"] as const).map((kind) => {
-              const items = (recent.length > 0 ? remaining : projects).filter(
-                (project) =>
-                  kind === "cost-center"
-                    ? isCostCenter(project)
-                    : !isCostCenter(project),
+              const source = rankedRecent.length > 0 ? rankedRemaining : rankedProjects;
+              const items = source.filter((project) =>
+                kind === "cost-center"
+                  ? isCostCenter(project)
+                  : !isCostCenter(project),
               );
               if (!items.length) return null;
               return (
@@ -145,13 +199,14 @@ export function ProjectCombobox({
                   heading={
                     kind === "cost-center"
                       ? "Centros de custo"
-                      : "Projetos Semear"
+                      : "Projetos"
                   }
                 >
                   {items.map((project) => (
                     <CommandItem
                       key={project.id}
-                      value={`${project.name} ${project.code ?? ""} ${project.id}`}
+                      value={projectSearchValue(project)}
+                      keywords={projectKeywords(project)}
                       data-checked={value === project.id || undefined}
                       onSelect={() => select(project.id)}
                     >

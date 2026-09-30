@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
+import { ticketVisibilityWhere } from "@/lib/auth/ticket-access";
 import { listAssignableUsers } from "@/lib/domain/users";
 import {
   parseTicketFilters,
@@ -27,6 +28,7 @@ export default async function FollowRequestsPage({
   const where = {
     AND: [
       ticketSearchWhere(filters),
+      ticketVisibilityWhere(session),
       {
         OR: [
           { assigneeId: session.userId },

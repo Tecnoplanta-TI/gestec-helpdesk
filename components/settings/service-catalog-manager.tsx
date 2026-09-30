@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { Add01Icon } from "@/lib/icons";
 import { apiRequest } from "@/lib/http/client";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
+import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -437,13 +438,14 @@ export function ServiceCatalogManager({
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
+                            aria-label="Editar"
                             onClick={() => openEditService(service)}
                           >
-                            Editar
+                            <Pencil />
                           </Button>
                           <Switch
                             checked={service.active}
@@ -472,10 +474,11 @@ export function ServiceCatalogManager({
                           />
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
+                            aria-label="Excluir"
                             onClick={() => setDeletingService(service)}
                           >
-                            Excluir
+                            <Trash2 />
                           </Button>
                         </div>
                       </TableCell>
@@ -528,7 +531,7 @@ export function ServiceCatalogManager({
               Código, nome e status do grupo de serviços.
             </SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-6">
+          <div className="flex-1 overflow-y-auto px-6 [scrollbar-width:thin]">
             <FieldGroup>
               <Field>
                 <FieldLabel htmlFor="edit-group-code">Código</FieldLabel>
@@ -591,7 +594,7 @@ export function ServiceCatalogManager({
               Código, nome, grupo e status do item de catálogo.
             </SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-6">
+          <div className="flex-1 overflow-y-auto px-6 [scrollbar-width:thin]">
             <FieldGroup>
               <Field>
                 <FieldLabel>Grupo</FieldLabel>

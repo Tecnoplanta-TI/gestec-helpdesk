@@ -95,23 +95,32 @@ describe("filtros e totais de Meu Tempo", () => {
 });
 
 describe("metas da Jornada", () => {
-  it("calcula a meta mensal pelos dias corridos de cada mês", () => {
+  it("calcula a meta mensal somente pelos dias úteis de cada mês", () => {
     expect(
       monthlyGoalSeconds(8 * 60 * 60, new Date("2026-09-03T12:00:00")),
-    ).toBe(30 * 8 * 60 * 60);
+    ).toBe(22 * 8 * 60 * 60);
     expect(
       monthlyGoalSeconds(6 * 60 * 60, new Date("2026-02-03T12:00:00")),
-    ).toBe(28 * DAILY_GOAL_SECONDS);
+    ).toBe(20 * DAILY_GOAL_SECONDS);
     expect(goalProgressPercent(10800, DAILY_GOAL_SECONDS)).toBe(50);
   });
 
-  it("calcula o acompanhamento da meta pelos dias já transcorridos", () => {
+  it("calcula o acompanhamento pelos dias úteis já transcorridos", () => {
     expect(
       elapsedMonthlyGoalSeconds(8 * 60 * 60, new Date("2026-09-03T12:00:00")),
     ).toBe(3 * 8 * 60 * 60);
     expect(
       elapsedMonthlyGoalSeconds(6 * 60 * 60, new Date("2026-02-28T12:00:00")),
-    ).toBe(28 * 6 * 60 * 60);
+    ).toBe(20 * 6 * 60 * 60);
+    expect(
+      elapsedMonthlyGoalSeconds(6 * 60 * 60, new Date("2026-09-05T12:00:00")),
+    ).toBe(4 * 6 * 60 * 60);
+    expect(
+      elapsedMonthlyGoalSeconds(6 * 60 * 60, new Date("2026-09-06T12:00:00")),
+    ).toBe(4 * 6 * 60 * 60);
+    expect(
+      elapsedMonthlyGoalSeconds(6 * 60 * 60, new Date("2026-02-01T12:00:00")),
+    ).toBe(0);
   });
 
   it("formata as boxes de hoje e meta", () => {

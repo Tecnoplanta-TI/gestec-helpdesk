@@ -10,7 +10,7 @@ import {
   timeEntrySourceLabels,
   timeEntryStatusLabels,
 } from "@/lib/format";
-import { errorResponse } from "@/lib/http/api-error";
+import { ApiError, errorResponse } from "@/lib/http/api-error";
 import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
@@ -25,6 +25,14 @@ export async function GET(request: Request) {
     const session = await requirePermission("reports:export");
     const { searchParams } = new URL(request.url);
     const { where, costCenterId } = await reportTimeEntryWhere(searchParams);
+    const total = await prisma.timeEntry.count({ where });
+    if (total > 5000) {
+      throw new ApiError(
+        422,
+        "EXPORT_TOO_LARGE",
+        "A exportação passa de 5.000 linhas. Reduza o período ou os filtros.",
+      );
+    }
     const entries = await prisma.timeEntry.findMany({
       where,
       include: {

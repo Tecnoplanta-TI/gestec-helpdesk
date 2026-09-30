@@ -1,4 +1,5 @@
 import { requirePermission } from "@/lib/auth/session";
+import { assertTicketVisible } from "@/lib/auth/ticket-access";
 import { unlinkTicketAsset } from "@/lib/domain/operations";
 import { errorResponse } from "@/lib/http/api-error";
 
@@ -9,6 +10,7 @@ export async function DELETE(
   try {
     const session = await requirePermission("tickets:work");
     const { id, assetId } = await context.params;
+    await assertTicketVisible(session, id);
     await unlinkTicketAsset({ ticketId: id, assetId, actorId: session.userId });
     return new Response(null, { status: 204 });
   } catch (error) {

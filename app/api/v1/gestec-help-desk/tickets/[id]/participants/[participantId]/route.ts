@@ -1,4 +1,5 @@
 import { requirePermission } from "@/lib/auth/session";
+import { assertTicketVisible } from "@/lib/auth/ticket-access";
 import { removeParticipant } from "@/lib/domain/operations";
 import { errorResponse } from "@/lib/http/api-error";
 
@@ -9,6 +10,7 @@ export async function DELETE(
   try {
     const session = await requirePermission("tickets:work");
     const { id, participantId } = await context.params;
+    await assertTicketVisible(session, id);
     await removeParticipant({
       ticketId: id,
       participantId,

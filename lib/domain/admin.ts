@@ -111,6 +111,47 @@ export async function updateAdminUser(input: {
   });
 }
 
+export async function deleteAdminUser(input: { id: string; actorId: string }) {
+  if (input.id === input.actorId) {
+    throw new ApiError(
+      422,
+      "SELF_DELETE_FORBIDDEN",
+      "Você não pode excluir o próprio usuário.",
+    );
+  }
+  const current = await prisma.userRef.findUnique({ where: { id: input.id } });
+  if (!current) {
+    throw new ApiError(404, "USER_NOT_FOUND", "Usuário não encontrado.");
+  }
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.auditEvent.create({
+        data: {
+          actorId: input.actorId,
+          action: "ADMIN_USER_DELETED",
+          entityType: "UserRef",
+          entityId: input.id,
+          before: auditSnapshot(current),
+        },
+      });
+      await tx.userRef.delete({ where: { id: input.id } });
+    });
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2003"
+    ) {
+      throw new ApiError(
+        409,
+        "USER_HAS_HISTORY",
+        "Este usuário tem histórico no Help Desk. Inative-o em vez de excluir.",
+      );
+    }
+    throw error;
+  }
+  return { id: input.id };
+}
+
 export async function createAdminTicket(input: {
   actorId: string;
   data: AdminTicketCreate;

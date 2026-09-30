@@ -69,7 +69,7 @@ export function CreateCostCenterDialog({
           <DialogTitle>Criar centro de custo</DialogTitle>
           <DialogDescription>
             O código precisa ser único. Centros de custo são usados nos tickets;
-            Projetos Semear são cadastrados separadamente.
+            Projetos são cadastrados separadamente.
           </DialogDescription>
         </DialogHeader>
         <FieldGroup>

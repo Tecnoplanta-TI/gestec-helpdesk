@@ -2,10 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
+import { DateField } from "@/components/date-field";
 import { CreateProjectDialog } from "@/components/time/create-project-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ import {
 import { apiRequest } from "@/lib/http/client";
 import { Add01Icon, SearchIcon } from "@/lib/icons";
 import { formatRateioSummary } from "@/lib/format";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   isRateioDraftValid,
   ProjectRateioFields,
@@ -274,20 +276,22 @@ export function ProjectList({
                       </TableCell>
                       {canManage ? (
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-1">
                             <Button
-                              variant="outline"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Editar"
                               onClick={() => openEditor(project)}
                             >
-                              Editar
+                              <Pencil />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
+                              aria-label="Excluir"
                               onClick={() => setDeleting(project)}
                             >
-                              Excluir
+                              <Trash2 />
                             </Button>
                           </div>
                         </TableCell>
@@ -327,7 +331,7 @@ export function ProjectList({
                 : " Nenhum valor-hora foi informado ainda."}
             </SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-6">
+          <div className="flex-1 overflow-y-auto px-6 [scrollbar-width:thin]">
             <FieldGroup>
               <Field>
                 <FieldLabel>Código</FieldLabel>
@@ -371,14 +375,13 @@ export function ProjectList({
                   <FieldLabel htmlFor="project-edit-rate-effective-from">
                     Válido a partir de
                   </FieldLabel>
-                  <Input
+                  <DateField
                     id="project-edit-rate-effective-from"
-                    type="date"
                     value={form.hourlyRateEffectiveFrom}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        hourlyRateEffectiveFrom: event.target.value,
+                        hourlyRateEffectiveFrom: value,
                       }))
                     }
                   />

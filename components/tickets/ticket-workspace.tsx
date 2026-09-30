@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowLeft01Icon, PlayIcon, StopIcon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ParticipantRole, TicketAssetRelation } from "@/lib/client-enums";
@@ -1458,7 +1458,7 @@ export function TicketWorkspace({
                   <DialogTrigger
                     render={
                       <Button
-                        className="w-full"
+                        className="w-full sm:w-auto"
                         disabled={
                           pending ||
                           !resolution.trim() ||

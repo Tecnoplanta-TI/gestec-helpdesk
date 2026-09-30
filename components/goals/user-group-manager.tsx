@@ -5,6 +5,14 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,6 +43,7 @@ export function UserGroupManager({
   const [name, setName] = useState("");
   const [managerId, setManagerId] = useState("");
   const [memberIds, setMemberIds] = useState<string[]>([]);
+  const [createOpen, setCreateOpen] = useState(false);
   const [pending, startTransition] = useTransition();
   function toggleMember(userId: string, checked: boolean) {
     setMemberIds((current) =>
@@ -65,6 +74,7 @@ export function UserGroupManager({
         setName("");
         setManagerId("");
         setMemberIds([]);
+        setCreateOpen(false);
         toast.success("Grupo criado.");
       } catch (error) {
         toast.error(
@@ -77,16 +87,29 @@ export function UserGroupManager({
   }
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Grupos de usuários
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Organize usuários em equipes para referência administrativa.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Grupos de usuários
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Organize usuários em equipes para referência administrativa.
+          </p>
+        </div>
+        <Button className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
+          Novo
+        </Button>
       </div>
-      <section className="rounded-xl border p-4">
-        <FieldGroup>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col overflow-hidden sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Novo grupo</DialogTitle>
+            <DialogDescription>
+              Informe o nome, o gestor e os membros da equipe.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto pe-1 [scrollbar-width:thin]">
+          <FieldGroup>
           <Field>
             <FieldLabel htmlFor="group-name">Nome do grupo</FieldLabel>
             <Input
@@ -162,11 +185,15 @@ export function UserGroupManager({
               Marque uma ou mais pessoas para compor o grupo.
             </p>
           </Field>
+          </FieldGroup>
+          </div>
+          <DialogFooter>
           <Button disabled={pending || name.trim().length < 2} onClick={create}>
             {pending ? "Criando…" : "Criar grupo"}
           </Button>
-        </FieldGroup>
-      </section>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <section className="divide-y rounded-xl border">
         {groups.length ? (
           groups.map((group) => (

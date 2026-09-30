@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addDays, format } from "date-fns";
 import {
@@ -15,7 +15,7 @@ import {
   PlayIcon,
   StopIcon,
 } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -43,6 +43,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { DateField } from "@/components/date-field";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -56,7 +57,7 @@ import {
   type TimeProject,
 } from "@/components/time/project-combobox";
 import { CreateProjectDialog } from "@/components/time/create-project-dialog";
-import { formatDuration } from "@/lib/format";
+import { formatDuration, toLocalDateInput, toLocalTimeInput } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
 import { groupTimeEntriesByDay } from "@/lib/domain/time-query";
 import type { TimeBillableFilter } from "@/lib/domain/time-query";
@@ -191,6 +192,22 @@ export function TimeWorkspace({
         )
       : 0,
   );
+  const [pendingTimer, setPendingTimer] = useState<ActiveTimer | null>(null);
+  const [timerSyncing, setTimerSyncing] = useState(false);
+  const [timerStopped, setTimerStopped] = useState(false);
+  const [clockOriginMs, setClockOriginMs] = useState<number | null>(null);
+  const [localTimerId, setLocalTimerId] = useState<string | null>(null);
+  const startRequestKey = useRef<string | null>(null);
+  const startInFlight = useRef(false);
+  const visibleTimer = timerStopped ? null : (pendingTimer ?? activeTimer);
+  const displayOriginMs =
+    clockOriginMs !== null &&
+    visibleTimer &&
+    visibleTimer.id === localTimerId
+      ? clockOriginMs
+      : visibleTimer
+        ? new Date(visibleTimer.startedAt).getTime()
+        : null;
   const [manualDate, setManualDate] = useState(serverNow.slice(0, 10));
   const [startTime, setStartTime] = useState("09:00");
   const [endTime, setEndTime] = useState("10:00");
@@ -199,6 +216,10 @@ export function TimeWorkspace({
   const [editDescription, setEditDescription] = useState("");
   const [editProjectId, setEditProjectId] = useState("");
   const [editBillable, setEditBillable] = useState(false);
+  const [editStartDate, setEditStartDate] = useState("");
+  const [editStartTime, setEditStartTime] = useState("");
+  const [editEndDate, setEditEndDate] = useState("");
+  const [editEndTime, setEditEndTime] = useState("");
   const [correctionReason, setCorrectionReason] = useState("");
   const [pendingTimerChange, setPendingTimerChange] = useState<{
     projectId?: string;
@@ -206,22 +227,38 @@ export function TimeWorkspace({
   } | null>(null);
 
   useEffect(() => {
+    if (displayOriginMs === null) {
+      setElapsed(0);
+      return;
+    }
+    const originMs = displayOriginMs;
+    const tick = () =>
+      setElapsed(Math.max(0, Math.floor((Date.now() - originMs) / 1000)));
+    tick();
+    const interval = window.setInterval(tick, 1000);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") tick();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [displayOriginMs]);
+
+  useEffect(() => {
     if (!activeTimer) return;
     setDescription(activeTimer.description);
     setProjectId(activeTimer.projectId);
     setBillable(activeTimer.billable);
-    const tick = () =>
-      setElapsed(
-        Math.max(
-          0,
-          Math.floor(
-            (Date.now() - new Date(activeTimer.startedAt).getTime()) / 1000,
-          ),
-        ),
-      );
-    tick();
-    const interval = window.setInterval(tick, 1000);
-    return () => window.clearInterval(interval);
+    if (pendingTimer && activeTimer.id === pendingTimer.id) {
+      setPendingTimer(null);
+      setTimerSyncing(false);
+    }
+  }, [activeTimer, pendingTimer]);
+
+  useEffect(() => {
+    if (!activeTimer) setTimerStopped(false);
   }, [activeTimer]);
 
   const groupedEntries = useMemo(
@@ -255,35 +292,122 @@ export function TimeWorkspace({
   }
 
   function start() {
-    if (!canWrite) return;
+    if (!canWrite || startInFlight.current || visibleTimer) return;
     if (!description.trim())
       return toast.error("Informe a descrição da atividade.");
     if (!projectId) return toast.error("Selecione um projeto ativo.");
-    run(
-      () =>
-        apiRequest("/api/v1/gestec-help-desk/timer", {
+    const requestKey = startRequestKey.current ?? crypto.randomUUID();
+    startRequestKey.current = requestKey;
+    const clickedAtMs = Date.now();
+    const pendingId = `pending:${requestKey}`;
+    setClockOriginMs(clickedAtMs);
+    setLocalTimerId(pendingId);
+    setPendingTimer({
+      id: pendingId,
+      description,
+      projectName:
+        projects.find((project) => project.id === projectId)?.name ?? "",
+      projectId,
+      billable,
+      startedAt: new Date(clickedAtMs).toISOString(),
+      version: 0,
+    });
+    setTimerSyncing(true);
+    setElapsed(0);
+    startInFlight.current = true;
+    startTransition(async () => {
+      try {
+        const saved = await apiRequest<{
+          id: string;
+          description: string;
+          projectName: string;
+          billable: boolean;
+          startedAt: string;
+          version: number;
+        }>("/api/v1/gestec-help-desk/timer", {
           method: "POST",
           body: JSON.stringify({
             description,
             projectId,
             billable,
-            requestKey: crypto.randomUUID(),
+            requestKey,
           }),
-        }),
-      "Timer iniciado.",
-    );
+        });
+        startRequestKey.current = null;
+        setLocalTimerId(saved.id);
+        setPendingTimer({
+          id: saved.id,
+          description: saved.description,
+          projectName: saved.projectName,
+          projectId,
+          billable: saved.billable,
+          startedAt: new Date(clickedAtMs).toISOString(),
+          version: saved.version,
+        });
+        setTimerSyncing(false);
+        toast.success("Timer iniciado.");
+        router.refresh();
+      } catch (error) {
+        setPendingTimer(null);
+        setClockOriginMs(null);
+        setLocalTimerId(null);
+        setTimerSyncing(false);
+        setElapsed(0);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível iniciar o timer. Tente novamente.",
+        );
+      } finally {
+        startInFlight.current = false;
+      }
+    });
   }
 
   function stop() {
-    if (!activeTimer) return;
-    run(
-      () =>
-        apiRequest("/api/v1/gestec-help-desk/timer", {
+    if (!visibleTimer) return;
+    if (timerSyncing || visibleTimer.id.startsWith("pending:")) {
+      toast.error(
+        "O timer ainda está sincronizando. Aguarde e tente parar de novo.",
+      );
+      return;
+    }
+    const timerId = visibleTimer.id;
+    const previous = {
+      pendingTimer,
+      clockOriginMs,
+      localTimerId,
+      timerSyncing,
+      elapsed,
+    };
+    setPendingTimer(null);
+    setClockOriginMs(null);
+    setLocalTimerId(null);
+    setTimerSyncing(false);
+    setTimerStopped(true);
+    setElapsed(0);
+    startTransition(async () => {
+      try {
+        await apiRequest("/api/v1/gestec-help-desk/timer", {
           method: "DELETE",
-          body: JSON.stringify({ timerId: activeTimer.id }),
-        }),
-      "Timer finalizado e apontamento criado.",
-    );
+          body: JSON.stringify({ timerId }),
+        });
+        toast.success("Timer finalizado e apontamento criado.");
+        router.refresh();
+      } catch (error) {
+        setPendingTimer(previous.pendingTimer);
+        setClockOriginMs(previous.clockOriginMs);
+        setLocalTimerId(previous.localTimerId);
+        setTimerSyncing(previous.timerSyncing);
+        setTimerStopped(false);
+        setElapsed(previous.elapsed);
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível parar o timer. O cronômetro continua em execução.",
+        );
+      }
+    });
   }
 
   function addManual() {
@@ -311,17 +435,17 @@ export function TimeWorkspace({
   }
 
   function applyProjectSelection(nextProjectId: string) {
-    if (activeTimer && nextProjectId !== activeTimer.projectId) {
+    if (visibleTimer && nextProjectId !== visibleTimer.projectId) {
       setPendingTimerChange({ projectId: nextProjectId });
       return;
     }
     setProjectId(nextProjectId);
     const project = projects.find((item) => item.id === nextProjectId);
-    if (project && !activeTimer) setBillable(project.billableByDefault);
+    if (project && !visibleTimer) setBillable(project.billableByDefault);
   }
 
   function applyBillableToggle() {
-    if (activeTimer) {
+    if (visibleTimer) {
       setPendingTimerChange({ billable: !billable });
       return;
     }
@@ -338,7 +462,7 @@ export function TimeWorkspace({
         body: JSON.stringify({
           projectId: pendingTimerChange.projectId,
           billable: pendingTimerChange.billable,
-          version: activeTimer?.version,
+          version: visibleTimer?.version,
         }),
       });
       setProjectId(nextProjectId);
@@ -349,7 +473,7 @@ export function TimeWorkspace({
 
   function restartSimilar(entry: Entry) {
     if (!canWrite) return;
-    if (activeTimer)
+    if (visibleTimer)
       return toast.error("Pare o timer atual antes de reiniciar outro.");
     const nextProjectId = entry.costCenterId
       ? `cost-center:${entry.costCenterId}`
@@ -395,11 +519,46 @@ export function TimeWorkspace({
           : "",
     );
     setEditBillable(entry.billable);
+    setEditStartDate(toLocalDateInput(entry.startedAt));
+    setEditStartTime(toLocalTimeInput(entry.startedAt));
+    setEditEndDate(toLocalDateInput(entry.endedAt));
+    setEditEndTime(toLocalTimeInput(entry.endedAt));
     setCorrectionReason("");
   }
 
   function updateEntry() {
     if (!editingEntry) return;
+    if (!editStartDate || !editStartTime || !editEndDate || !editEndTime) {
+      toast.error("Informe o início e o término do apontamento.");
+      return;
+    }
+    const startedAt = new Date(`${editStartDate}T${editStartTime}:00`);
+    const endedAt = new Date(`${editEndDate}T${editEndTime}:00`);
+    if (
+      Number.isNaN(startedAt.getTime()) ||
+      Number.isNaN(endedAt.getTime())
+    ) {
+      toast.error("Informe datas e horários válidos.");
+      return;
+    }
+    if (endedAt <= startedAt) {
+      toast.error("A hora final deve ser posterior à inicial.");
+      return;
+    }
+    const durationSeconds = Math.floor(
+      (endedAt.getTime() - startedAt.getTime()) / 1000,
+    );
+    if (durationSeconds > 86_400) {
+      toast.error("A duração deve ser maior que zero e de no máximo 24 horas.");
+      return;
+    }
+    const reason = correctionReason.trim();
+    if (reason && reason.length < 3) {
+      toast.error(
+        "O motivo deve ter pelo menos 3 caracteres ou ficar em branco.",
+      );
+      return;
+    }
     run(async () => {
       await apiRequest(
         `/api/v1/gestec-help-desk/time-entries/${editingEntry.id}`,
@@ -409,7 +568,9 @@ export function TimeWorkspace({
             description: editDescription,
             projectId: editProjectId || undefined,
             billable: editBillable,
-            correctionReason,
+            startedAt,
+            endedAt,
+            ...(reason ? { correctionReason: reason } : {}),
             version: editingEntry.version,
           }),
         },
@@ -460,13 +621,16 @@ export function TimeWorkspace({
         </div>
       </div>
 
-      {activeTimer ? (
+      {visibleTimer ? (
         <Alert className="border-primary/30 bg-primary/5">
           <HugeiconsIcon icon={InformationCircleIcon} />
-          <AlertTitle>Timer em execução</AlertTitle>
+          <AlertTitle>
+            {timerSyncing ? "Sincronizando timer" : "Timer em execução"}
+          </AlertTitle>
           <AlertDescription>
-            Somente um timer pode ficar ativo. Alterações de projeto ou
-            faturabilidade exigem confirmação.
+            {timerSyncing
+              ? "O relógio já está contando. A gravação só fica confirmada quando o servidor responder."
+              : "Somente um timer pode ficar ativo. Alterações de projeto ou faturabilidade exigem confirmação."}
           </AlertDescription>
         </Alert>
       ) : null}
@@ -476,7 +640,7 @@ export function TimeWorkspace({
           <Input
             value={description}
             onChange={(event) => setDescription(event.target.value)}
-            disabled={Boolean(activeTimer) || !canWrite}
+            disabled={Boolean(visibleTimer) || !canWrite}
             placeholder="Em que você está trabalhando?"
             aria-label="Descrição da atividade"
           />
@@ -507,16 +671,15 @@ export function TimeWorkspace({
           />
           {mode === "timer" ? (
             <span className="min-w-24 text-center font-mono text-lg font-semibold tabular-nums">
-              {formatDuration(activeTimer ? elapsed : 0)}
+              {formatDuration(visibleTimer ? elapsed : 0)}
             </span>
           ) : (
             <div className="flex items-center gap-2">
-              <Input
-                className="w-36"
-                type="date"
+              <DateField
                 value={manualDate}
-                onChange={(event) => setManualDate(event.target.value)}
+                onChange={setManualDate}
                 disabled={!canWrite}
+                className="w-40"
               />
               <Input
                 className="w-24"
@@ -524,6 +687,7 @@ export function TimeWorkspace({
                 value={startTime}
                 onChange={(event) => setStartTime(event.target.value)}
                 disabled={!canWrite}
+                aria-label="Hora inicial"
               />
               <span>–</span>
               <Input
@@ -532,10 +696,11 @@ export function TimeWorkspace({
                 value={endTime}
                 onChange={(event) => setEndTime(event.target.value)}
                 disabled={!canWrite}
+                aria-label="Hora final"
               />
             </div>
           )}
-          {activeTimer ? (
+          {visibleTimer ? (
             <Button
               variant="destructive"
               disabled={pending || !canWrite}
@@ -546,7 +711,11 @@ export function TimeWorkspace({
           ) : mode === "timer" ? (
             <Button
               disabled={
-                pending || !canWrite || !description.trim() || !projectId
+                pending ||
+                timerSyncing ||
+                !canWrite ||
+                !description.trim() ||
+                !projectId
               }
               onClick={start}
             >
@@ -571,7 +740,7 @@ export function TimeWorkspace({
                     type="button"
                     variant={mode === "manual" ? "secondary" : "outline"}
                     size="icon"
-                    disabled={Boolean(activeTimer)}
+                    disabled={Boolean(visibleTimer)}
                     onClick={() =>
                       setMode((value) =>
                         value === "timer" ? "manual" : "timer",
@@ -834,6 +1003,36 @@ export function TimeWorkspace({
                 onCheckedChange={setEditBillable}
               />
             </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field>
+                <FieldLabel htmlFor="edit-entry-start-date">Início</FieldLabel>
+                <DateField
+                  id="edit-entry-start-date"
+                  value={editStartDate}
+                  onChange={setEditStartDate}
+                />
+                <Input
+                  type="time"
+                  value={editStartTime}
+                  onChange={(event) => setEditStartTime(event.target.value)}
+                  aria-label="Hora de início"
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="edit-entry-end-date">Término</FieldLabel>
+                <DateField
+                  id="edit-entry-end-date"
+                  value={editEndDate}
+                  onChange={setEditEndDate}
+                />
+                <Input
+                  type="time"
+                  value={editEndTime}
+                  onChange={(event) => setEditEndTime(event.target.value)}
+                  aria-label="Hora de término"
+                />
+              </Field>
+            </div>
             <Field>
               <FieldLabel htmlFor="correction-reason">
                 Motivo da correção
@@ -842,7 +1041,7 @@ export function TimeWorkspace({
                 id="correction-reason"
                 value={correctionReason}
                 onChange={(event) => setCorrectionReason(event.target.value)}
-                placeholder="Informe o motivo obrigatório"
+                placeholder="Opcional"
               />
             </Field>
           </FieldGroup>
@@ -858,11 +1057,7 @@ export function TimeWorkspace({
               Invalidar
             </Button>
             <Button
-              disabled={
-                pending ||
-                editDescription.trim().length < 1 ||
-                correctionReason.trim().length < 3
-              }
+              disabled={pending || editDescription.trim().length < 1}
               onClick={updateEntry}
             >
               Salvar alterações

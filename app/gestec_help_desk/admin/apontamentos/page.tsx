@@ -1,7 +1,7 @@
 import { addDays, format } from "date-fns";
 
+import { ApontamentosPeriodFilter } from "@/components/admin/apontamentos-period-filter";
 import { AdminTimeEntryManager } from "@/components/admin/time-entry-manager";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,7 +9,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { requirePagePermission } from "@/lib/auth/page-session";
 import { listProjectCatalog, toTimeProjects } from "@/lib/domain/projects";
 import { prisma } from "@/lib/prisma";
@@ -77,17 +76,7 @@ export default async function AdminTimeEntriesPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <form className="flex flex-wrap items-end gap-3" method="get">
-            <label className="flex flex-col gap-1 text-sm">
-              De
-              <Input type="date" name="from" defaultValue={fromValue} />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              Até
-              <Input type="date" name="to" defaultValue={toValue} />
-            </label>
-            <Button type="submit">Filtrar</Button>
-          </form>
+          <ApontamentosPeriodFilter from={fromValue} to={toValue} />
           <AdminTimeEntryManager
             entries={JSON.parse(JSON.stringify(entries))}
             users={users}

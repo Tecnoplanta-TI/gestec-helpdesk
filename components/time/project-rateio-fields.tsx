@@ -18,13 +18,12 @@ import {
   RATEIO_TOTAL_BPS,
 } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
+import { appendRateioShare, type RateioShareDraft } from "@/lib/domain/rateio-draft";
 import { Add01Icon, Cancel01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 
-export type RateioShareDraft = {
-  costCenterId: string;
-  percent: string;
-};
+export type { RateioShareDraft } from "@/lib/domain/rateio-draft";
+export { appendRateioShare } from "@/lib/domain/rateio-draft";
 
 export type RateioShareValue = {
   costCenterId: string;
@@ -63,6 +62,7 @@ export function sharesFromRateio(
   rateio: RateioShareValue[] | undefined,
 ): RateioShareDraft[] {
   return (rateio ?? []).map((share) => ({
+    id: share.costCenterId,
     costCenterId: share.costCenterId,
     percent: formatSharePercent(share.shareBps),
   }));
@@ -133,20 +133,7 @@ export function ProjectRateioFields({
   }, 0);
 
   function addShare() {
-    const nextCount = shares.length + 1;
-    if (nextCount === 1) {
-      onChange([{ costCenterId: "", percent: "100" }]);
-      return;
-    }
-    const evenBps = Math.floor(RATEIO_TOTAL_BPS / nextCount);
-    const lastBps = RATEIO_TOTAL_BPS - evenBps * (nextCount - 1);
-    onChange([
-      ...shares.map((share) => ({
-        ...share,
-        percent: formatSharePercent(evenBps),
-      })),
-      { costCenterId: "", percent: formatSharePercent(lastBps) },
-    ]);
+    onChange(appendRateioShare(shares));
   }
 
   return (
@@ -164,7 +151,7 @@ export function ProjectRateioFields({
               <span className="text-right">%</span>
               <span className="sr-only">Remover</span>
             </div>
-            {shares.map((share, index) => {
+            {shares.map((share) => {
               const available = options.filter(
                 (center) =>
                   center.id === share.costCenterId ||
@@ -178,15 +165,15 @@ export function ProjectRateioFields({
               );
               return (
                 <div
-                  key={`${share.costCenterId}-${index}`}
+                  key={share.id}
                   className="grid grid-cols-[1fr_5.5rem_auto] items-center gap-2 border-b px-3 py-2 last:border-b-0"
                 >
                   <Select
                     value={share.costCenterId || undefined}
                     onValueChange={(value) =>
                       onChange(
-                        shares.map((current, currentIndex) =>
-                          currentIndex === index
+                        shares.map((current) =>
+                          current.id === share.id
                             ? { ...current, costCenterId: value ?? "" }
                             : current,
                         ),
@@ -214,8 +201,8 @@ export function ProjectRateioFields({
                     value={share.percent}
                     onChange={(event) =>
                       onChange(
-                        shares.map((current, currentIndex) =>
-                          currentIndex === index
+                        shares.map((current) =>
+                          current.id === share.id
                             ? { ...current, percent: event.target.value }
                             : current,
                         ),
@@ -231,9 +218,7 @@ export function ProjectRateioFields({
                     aria-label="Remover centro de custo"
                     onClick={() =>
                       onChange(
-                        shares.filter(
-                          (_, currentIndex) => currentIndex !== index,
-                        ),
+                        shares.filter((current) => current.id !== share.id),
                       )
                     }
                   >
@@ -242,8 +227,12 @@ export function ProjectRateioFields({
                 </div>
               );
             })}
-            <div className="flex items-center justify-between px-3 py-2 text-sm">
-              <span className="text-muted-foreground">Soma</span>
+            <div className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                {totalBps === RATEIO_TOTAL_BPS
+                  ? "Soma"
+                  : "A soma precisa ser 100%. Os percentuais digitados foram mantidos."}
+              </span>
               <span
                 className={`tabular-nums ${
                   totalBps === RATEIO_TOTAL_BPS

@@ -105,14 +105,15 @@ export function AdminTicketCreateDialog({
         onOpenChange(next);
       }}
     >
-      <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle>Novo ticket</DialogTitle>
           <DialogDescription>
             Abertura manual no Help Desk. Depois você pode completar os demais
             campos.
           </DialogDescription>
         </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 [scrollbar-width:thin]">
         <FieldGroup>
           <Field>
             <FieldLabel htmlFor="new-ticket-title">Título</FieldLabel>
@@ -241,7 +242,8 @@ export function AdminTicketCreateDialog({
             </Select>
           </Field>
         </FieldGroup>
-        <DialogFooter>
+        </div>
+        <DialogFooter className="border-t px-6 py-4">
           <DialogClose render={<Button variant="outline" disabled={pending} />}>
             Cancelar
           </DialogClose>

@@ -64,7 +64,7 @@ export function PasswordRecoveryForm() {
           />
         </Field>
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
-        <Button className="w-full" disabled={submitting} size="lg" type="submit">
+        <Button className="w-full sm:w-auto" disabled={submitting} size="lg" type="submit">
           {submitting ? "Enviando link..." : "Enviar link de recuperação"}
         </Button>
         <FieldDescription className="text-center">

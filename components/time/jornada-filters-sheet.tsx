@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 
+import { DateField } from "@/components/date-field";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -27,7 +28,7 @@ import {
 } from "@/components/time/project-combobox";
 import { FilterIcon } from "@/lib/icons";
 import type { TimeBillableFilter } from "@/lib/domain/time-query";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 
 export type JornadaFilters = {
   from: string;
@@ -85,18 +86,17 @@ export function JornadaFiltersSheet({
             Preencha os campos para realizar o filtro
           </SheetDescription>
         </SheetHeader>
-        <div className="flex-1 overflow-y-auto px-6">
+        <div className="flex-1 overflow-y-auto px-6 [scrollbar-width:thin]">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="jornada-filter-date">Data</FieldLabel>
-              <Input
+              <DateField
                 id="jornada-filter-date"
-                type="date"
                 value={draft.from}
-                onChange={(event) =>
+                onChange={(value) =>
                   setDraft((current) => ({
                     ...current,
-                    from: event.target.value,
+                    from: value,
                   }))
                 }
               />
@@ -131,6 +131,11 @@ export function JornadaFiltersSheet({
             <Field>
               <FieldLabel>Faturabilidade</FieldLabel>
               <Select
+                items={[
+                  { value: "all", label: "Todos" },
+                  { value: "billable", label: "Faturável" },
+                  { value: "non-billable", label: "Não faturável" },
+                ]}
                 value={draft.billable}
                 onValueChange={(value) =>
                   setDraft((current) => ({

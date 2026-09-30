@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
+import { DateField } from "@/components/date-field";
 import { Button } from "@/components/ui/button";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
 import {
@@ -12,6 +14,14 @@ import {
   FieldGroup,
   FieldLabel,
 } from "@/components/ui/field";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -20,8 +30,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
-import { daysInMonth, monthlyGoalSeconds } from "@/lib/domain/time-goals";
+import {
+  monthlyGoalSeconds,
+  weekdaysInMonth,
+} from "@/lib/domain/time-goals";
 import {
   currentLocalDateValue,
   formatDateOnly,
@@ -55,6 +73,7 @@ export function GoalManager({
   const [goals, setGoals] = useState(initialGoals);
   const [pending, startTransition] = useTransition();
   const [deleting, setDeleting] = useState<Goal | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const [targetId, setTargetId] = useState("");
   const [title, setTitle] = useState("");
   const [hours, setHours] = useState("");
@@ -68,7 +87,7 @@ export function GoalManager({
   const invalidPeriod =
     !startsOn || (!permanent && (!endsOn || endsOn < startsOn));
   const referenceMonth = new Date(`${startsOn || today}T12:00:00`);
-  const referenceMonthDays = daysInMonth(referenceMonth);
+  const referenceMonthWeekdays = weekdaysInMonth(referenceMonth);
   const monthlyEquivalentSeconds = invalidHours
     ? null
     : monthlyGoalSeconds(Math.round(hoursValue * 3600), referenceMonth);
@@ -91,6 +110,7 @@ export function GoalManager({
         setHours("");
         setTargetId("");
         setPermanent(false);
+        setCreateOpen(false);
         toast.success("Meta criada e o usuário foi notificado.");
       } catch (error) {
         toast.error(
@@ -125,18 +145,29 @@ export function GoalManager({
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Metas de horas
-        </h1>
-        <p className="text-sm text-muted-foreground">
-          Defina metas individuais em horas por dia. O total mensal é calculado
-          automaticamente pelos dias corridos de cada mês.
-        </p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            Metas de horas
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            Defina metas individuais em horas por dia útil. O total mensal é
+            calculado automaticamente de segunda a sexta.
+          </p>
+        </div>
+        <Button className="w-full sm:w-auto" onClick={() => setCreateOpen(true)}>
+          Novo
+        </Button>
       </div>
-      {canManage ? (
-        <section className="rounded-xl border p-4">
-          <h2 className="mb-4 font-medium">Nova meta</h2>
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+          <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col overflow-hidden sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Nova meta</DialogTitle>
+              <DialogDescription>
+                A meta vale nos dias úteis do período informado.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="min-h-0 flex-1 overflow-y-auto pe-1 [scrollbar-width:thin]">
           <FieldGroup>
             <Field>
               <FieldLabel htmlFor="goal-title">Nome da meta</FieldLabel>
@@ -166,7 +197,9 @@ export function GoalManager({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="goal-hours">Meta em horas por dia</FieldLabel>
+              <FieldLabel htmlFor="goal-hours">
+                Meta em horas por dia útil
+              </FieldLabel>
               <Input
                 id="goal-hours"
                 inputMode="decimal"
@@ -178,17 +211,17 @@ export function GoalManager({
               {monthlyEquivalentSeconds !== null ? (
                 <FieldDescription>
                   Equivale a {formatHoursMinutes(monthlyEquivalentSeconds)} no
-                  mês de vigência selecionado ({referenceMonthDays} dias).
+                  mês de vigência selecionado ({referenceMonthWeekdays} dias
+                  úteis).
                 </FieldDescription>
               ) : null}
             </Field>
             <Field>
               <FieldLabel htmlFor="goal-start">Início</FieldLabel>
-              <Input
+              <DateField
                 id="goal-start"
-                type="date"
                 value={startsOn}
-                onChange={(event) => setStartsOn(event.target.value)}
+                onChange={setStartsOn}
               />
             </Field>
             <Field orientation="horizontal">
@@ -207,16 +240,18 @@ export function GoalManager({
             {!permanent ? (
               <Field data-invalid={invalidPeriod}>
                 <FieldLabel htmlFor="goal-end">Fim</FieldLabel>
-                <Input
+                <DateField
                   id="goal-end"
-                  type="date"
                   value={endsOn}
                   min={startsOn}
-                  onChange={(event) => setEndsOn(event.target.value)}
-                  aria-invalid={invalidPeriod}
+                  invalid={invalidPeriod}
+                  onChange={setEndsOn}
                 />
               </Field>
             ) : null}
+          </FieldGroup>
+          </div>
+          <DialogFooter>
             <Button
               disabled={
                 pending ||
@@ -229,9 +264,9 @@ export function GoalManager({
             >
               {pending ? "Criando…" : "Criar meta"}
             </Button>
-          </FieldGroup>
-        </section>
-      ) : null}
+          </DialogFooter>
+          </DialogContent>
+        </Dialog>
       <section className="overflow-hidden rounded-xl border">
         <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-3 border-b px-4 py-3 text-xs text-muted-foreground">
           <span>Meta</span>
@@ -299,14 +334,22 @@ export function GoalManager({
                   </span>
                 )}
                 {canManage ? (
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    disabled={pending}
-                    onClick={() => setDeleting(goal)}
-                  >
-                    Excluir
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger
+                      render={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Excluir meta ${goal.title}`}
+                          disabled={pending}
+                          onClick={() => setDeleting(goal)}
+                        />
+                      }
+                    >
+                      <Trash2 />
+                    </TooltipTrigger>
+                    <TooltipContent>Excluir</TooltipContent>
+                  </Tooltip>
                 ) : null}
               </div>
             </div>

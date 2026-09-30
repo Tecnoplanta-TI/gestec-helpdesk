@@ -127,6 +127,28 @@ Cada decisão segue o padrão:
 | **Alternativas** | BullMQ + Redis; processamento somente em memória; serviço externo de filas |
 | **Consequências** | Elimina Redis e BullMQ do escopo do módulo; exige handlers idempotentes, observabilidade, controle de concorrência, política de retenção e migrations/configuração validadas no repositório executável |
 
+### DEC-012 — Acesso Supabase somente com cadastro prévio
+
+| Campo | Valor |
+|-------|-------|
+| **Status** | Aprovada para implementação em 2026-09-30 |
+| **Data** | 2026-09-30 |
+| **Contexto** | Uma conta autenticada no Supabase sem `UserRef` recebia `TECHNICIAN` e era criada no primeiro login |
+| **Decisão** | Negar o acesso com 403 e não criar `UserRef`. O papel gravado no cadastro local é a autoridade. A allowlist `SUPABASE_ADMIN_EMAILS` não cria usuário nem troca o papel já salvo. No projeto Supabase: cadastro público desligado, e-mail como único provedor, Site URL `https://desk.gestec.io`, redirect somente nesse domínio, confirmação de e-mail ligada e MFA não obrigatório nesta fase |
+| **Alternativas** | Continuar criando técnico automaticamente; promover admin pela allowlist a cada login |
+| **Consequências** | Cada pessoa precisa existir em Admin → Usuários antes de entrar. A conferência ao vivo do painel Supabase continua manual |
+
+### DEC-013 — Matriz de papéis do Help Desk
+
+| Campo | Valor |
+|-------|-------|
+| **Status** | Aprovada para implementação em 2026-09-30, igual ao código em `lib/auth/permissions.ts` |
+| **Data** | 2026-09-30 |
+| **Contexto** | Era preciso registrar quem vê tickets, tempo, ativos, relatórios e cadastros, sem alargar o acesso |
+| **Decisão** | Quatro papéis. `ADMIN`: todas as permissões, inclusive `admin:manage`. `MANAGER`: tickets, tempo, ativos, relatórios, metas e notificações, sem cadastro administrativo. `TECHNICIAN`: ver e trabalhar tickets, ver e lançar o próprio tempo, ver ativos, relatórios, notificações e metas. `AUDITOR`: somente leitura de tickets, tempo, ativos, relatórios, notificações e metas. Relatórios e exportação `.xlsx` permanecem para todo usuário autenticado. Usuário sem cadastro local não entra. Payload de integração, erro interno de sincronização e comentário interno ficam restritos a `ADMIN` e `MANAGER`. E-mail e papel aparecem no cadastro de usuários, restrito a `ADMIN` |
+| **Alternativas** | Relatórios só para administrador; criar papéis novos de solicitante e financeiro nesta etapa |
+| **Consequências** | A T05 usa esta regra. Escopo por empresa ou equipe ainda não existe no código e não foi inventado |
+
 ### DEC-007 — Feriados no calendário de cobertura
 
 | Campo | Valor |

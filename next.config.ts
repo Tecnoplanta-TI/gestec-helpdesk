@@ -6,7 +6,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   serverExternalPackages: ["exceljs", "pg", "pg-boss", "pg-native"],
   experimental: {
-    optimizePackageImports: ["@hugeicons/core-free-icons", "@hugeicons/react"],
+    optimizePackageImports: ["lucide-react"],
   },
   onDemandEntries: {
     maxInactiveAge: 60 * 60 * 1000,

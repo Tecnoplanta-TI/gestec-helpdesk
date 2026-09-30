@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserRole } from "@/lib/client-enums";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -45,6 +45,8 @@ import {
 import { Add01Icon } from "@/lib/icons";
 import { userRoleLabels } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
+import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
+import { Pencil, Trash2 } from "lucide-react";
 
 export type AdminUser = {
   id: string;
@@ -81,6 +83,7 @@ export function AdminUserManager({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AdminUser | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [deleting, setDeleting] = useState<AdminUser | null>(null);
 
   function close() {
     setOpen(false);
@@ -126,6 +129,27 @@ export function AdminUserManager({
       } catch (error) {
         toast.error(
           error instanceof Error ? error.message : "Não foi possível salvar.",
+        );
+      }
+    });
+  }
+
+  function remove() {
+    if (!deleting) return;
+    startTransition(async () => {
+      try {
+        await apiRequest(
+          `/api/v1/gestec-help-desk/admin/users/${deleting.id}`,
+          { method: "DELETE" },
+        );
+        toast.success("Usuário excluído.");
+        setDeleting(null);
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível excluir o usuário.",
         );
       }
     });
@@ -212,13 +236,23 @@ export function AdminUserManager({
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-2">
+                        <div className="flex items-center justify-end gap-1">
                           <Button
                             variant="ghost"
-                            size="sm"
+                            size="icon"
+                            aria-label={`Editar ${item.name}`}
                             onClick={() => startEdit(item)}
                           >
-                            Editar
+                            <Pencil />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            aria-label={`Excluir ${item.name}`}
+                            disabled={pending || item.id === currentUserId}
+                            onClick={() => setDeleting(item)}
+                          >
+                            <Trash2 />
                           </Button>
                           <Switch
                             checked={item.active}
@@ -361,6 +395,20 @@ export function AdminUserManager({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConfirmDeleteDialog
+        open={Boolean(deleting)}
+        title="Excluir usuário"
+        description={
+          deleting
+            ? `Excluir ${deleting.name}? Esta ação só funciona se a pessoa ainda não tiver tickets, apontamentos ou outro histórico.`
+            : ""
+        }
+        pending={pending}
+        onOpenChange={(next) => {
+          if (!next) setDeleting(null);
+        }}
+        onConfirm={remove}
+      />
     </div>
   );
 }

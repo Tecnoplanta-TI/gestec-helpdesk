@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { TimeEntrySource, TimeEntryStatus } from "@/lib/client-enums";
 import { toast } from "sonner";
 
+import { DateField, DateTimeField } from "@/components/date-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -22,7 +23,6 @@ import {
   DropdownMenuContent,
   DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -45,14 +45,8 @@ import {
   ProjectCombobox,
   type TimeProject,
 } from "@/components/time/project-combobox";
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -62,9 +56,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
+import { Pencil, Trash2 } from "lucide-react";
 import { Add01Icon, MoreVerticalIcon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import {
   formatDateTime,
   formatHoursMinutes,
@@ -325,7 +319,7 @@ export function AdminTimeEntryManager({
   function saveBulkEdit() {
     const body: {
       entries: BulkTargetEntry[];
-      correctionReason: string;
+      correctionReason?: string;
       description?: string;
       userId?: string;
       projectId?: string;
@@ -356,7 +350,7 @@ export function AdminTimeEntryManager({
         }
         return target;
       }),
-      correctionReason: bulkReason.trim(),
+      correctionReason: bulkReason.trim() || undefined,
     };
     if (bulkFields.description) body.description = bulkDescription.trim();
     if (bulkFields.user) body.userId = bulkUserId;
@@ -449,7 +443,9 @@ export function AdminTimeEntryManager({
                 endedAt: new Date(form.endedAt).toISOString(),
                 status: form.status,
                 source: form.source,
-                correctionReason: reason,
+                ...(reason.trim()
+                  ? { correctionReason: reason.trim() }
+                  : {}),
                 version: editing.version,
               }),
             },
@@ -588,14 +584,41 @@ export function AdminTimeEntryManager({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="inline-flex items-center justify-end gap-1 rounded-lg border p-0.5">
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => open(entry)}
-                      >
-                        Editar
-                      </Button>
+                    <div className="inline-flex items-center justify-end gap-1">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Editar apontamento de ${entry.user.name}`}
+                              onClick={() => open(entry)}
+                            />
+                          }
+                        >
+                          <Pencil />
+                        </TooltipTrigger>
+                        <TooltipContent>Editar</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Excluir apontamento de ${entry.user.name}`}
+                              disabled={entry.status === TimeEntryStatus.VOIDED}
+                              onClick={() => {
+                                setDeleteReason("");
+                                setDeleteEntries([entry]);
+                              }}
+                            />
+                          }
+                        >
+                          <Trash2 />
+                        </TooltipTrigger>
+                        <TooltipContent>Excluir</TooltipContent>
+                      </Tooltip>
                       <DropdownMenu>
                         <DropdownMenuTrigger
                           render={
@@ -619,18 +642,6 @@ export function AdminTimeEntryManager({
                               onClick={() => duplicate(entry)}
                             >
                               Duplicar
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              className="rounded-lg"
-                              variant="destructive"
-                              disabled={entry.status === TimeEntryStatus.VOIDED}
-                              onClick={() => {
-                                setDeleteReason("");
-                                setDeleteEntries([entry]);
-                              }}
-                            >
-                              Excluir
                             </DropdownMenuItem>
                           </DropdownMenuGroup>
                         </DropdownMenuContent>
@@ -861,10 +872,9 @@ export function AdminTimeEntryManager({
                 <FieldLabel htmlFor="bulk-date-enabled" className="font-medium">
                   Data
                 </FieldLabel>
-                <Input
-                  type="date"
+                <DateField
                   value={bulkDate}
-                  onChange={(event) => setBulkDate(event.target.value)}
+                  onChange={setBulkDate}
                   disabled={!bulkFields.date}
                 />
               </Field>
@@ -878,8 +888,8 @@ export function AdminTimeEntryManager({
               id="bulk-time-reason"
               value={bulkReason}
               onChange={(event) => setBulkReason(event.target.value)}
-              minLength={3}
               maxLength={1000}
+              placeholder="Opcional"
             />
           </Field>
           <DialogFooter>
@@ -892,7 +902,8 @@ export function AdminTimeEntryManager({
               onClick={saveBulkEdit}
               disabled={
                 pending ||
-                bulkReason.trim().length < 3 ||
+                bulkReason.trim().length === 1 ||
+                bulkReason.trim().length === 2 ||
                 selectedEntries.length === 0 ||
                 !Object.values(bulkFields).some(Boolean) ||
                 (bulkFields.description && !bulkDescription.trim()) ||
@@ -957,24 +968,25 @@ export function AdminTimeEntryManager({
         </DialogContent>
       </Dialog>
 
-      <Sheet
+      <Dialog
         open={creating || Boolean(editing)}
-        onOpenChange={(openSheet) => {
-          if (!openSheet) closeSheet();
+        onOpenChange={(openDialog) => {
+          if (!openDialog) closeSheet();
         }}
       >
-        <SheetContent className="overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>
+        <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col gap-4 overflow-hidden sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
               {creating ? "Novo apontamento" : "Corrigir apontamento"}
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               {creating
                 ? "Lance horas de qualquer pessoa em qualquer projeto."
-                : "A duração é recalculada pelas datas. Informe o motivo."}
-            </SheetDescription>
-          </SheetHeader>
-          <FieldGroup className="px-4">
+                : "A duração é recalculada pelas datas. O motivo é opcional."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto pe-1 [scrollbar-width:thin]">
+          <FieldGroup>
             <Field>
               <FieldLabel>Pessoa</FieldLabel>
               <Select
@@ -1051,28 +1063,26 @@ export function AdminTimeEntryManager({
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-time-start">Início</FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-time-start"
-                type="datetime-local"
                 value={form.startedAt}
-                onChange={(event) =>
+                onChange={(startedAt) =>
                   setForm((current) => ({
                     ...current,
-                    startedAt: event.target.value,
+                    startedAt,
                   }))
                 }
               />
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-time-end">Fim</FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-time-end"
-                type="datetime-local"
                 value={form.endedAt}
-                onChange={(event) =>
+                onChange={(endedAt) =>
                   setForm((current) => ({
                     ...current,
-                    endedAt: event.target.value,
+                    endedAt,
                   }))
                 }
               />
@@ -1150,25 +1160,29 @@ export function AdminTimeEntryManager({
                   id="admin-time-reason"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
+                  placeholder="Opcional"
                 />
               </Field>
             )}
           </FieldGroup>
-          <SheetFooter>
+          </div>
+          <DialogFooter>
             <Button
               disabled={
                 pending ||
                 !form.description.trim() ||
                 !form.projectId ||
-                (!creating && reason.trim().length < 3)
+                (!creating &&
+                  reason.trim().length > 0 &&
+                  reason.trim().length < 3)
               }
               onClick={save}
             >
               {pending ? "Salvando…" : creating ? "Criar" : "Salvar"}
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

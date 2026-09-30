@@ -1,5 +1,5 @@
 import { Download01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -74,7 +74,9 @@ export default async function ReportsPage({
   if (billableValue && billableValue !== "all")
     reportParams.set("billable", billableValue);
   if (ticketValue) reportParams.set("ticket", ticketValue);
-  if (requestedUser !== "all") reportParams.set("userId", userValue);
+  // Keep the distinction between the default (current user) and an explicit
+  // request for every user in the URL passed to both the page and export.
+  reportParams.set("userId", requestedUser || session.userId);
   const {
     from,
     to,
@@ -260,8 +262,8 @@ export default async function ReportsPage({
           key: `project:${row.manualProjectId}`,
           name: project
             ? formatCatalogLabel(project.code, project.name)
-            : (row.projectNameSnapshot ?? "Projeto Semear"),
-          type: "Projeto Semear",
+            : (row.projectNameSnapshot ?? "Projeto"),
+          type: "Projeto",
           rateio: shares.length ? formatRateioSummary(shares) : "Sem rateio",
           seconds,
         };
@@ -325,15 +327,15 @@ export default async function ReportsPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Relatórios</h1>
           <p className="text-sm text-muted-foreground">
             Indicadores calculados a partir dos dados operacionais e do período
             selecionado.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
           <ReportsFiltersSheet
             filters={filterState}
             costCenters={activeCostCenters.map((costCenter) => ({
@@ -362,10 +364,6 @@ export default async function ReportsPage({
           </Button>
         </div>
       </div>
-      <p className="text-sm text-muted-foreground">
-        Centro de custo inclui horas diretas e o rateio dos projetos Semear. A
-        exportação usa os mesmos filtros selecionados.
-      </p>
       <Tabs defaultValue="summary" className="gap-6">
         <TabsList aria-label="Visão do relatório">
           <TabsTrigger value="summary">Resumido</TabsTrigger>
@@ -441,7 +439,7 @@ export default async function ReportsPage({
               <CardHeader>
                 <CardTitle>Horas por centro de custo e projeto</CardTitle>
                 <CardDescription>
-                  Projetos Semear mostram o rateio cadastrado; a duração é a
+                  Projetos mostram o rateio cadastrado; a duração é a
                   hora original apontada.
                 </CardDescription>
               </CardHeader>
@@ -491,7 +489,7 @@ export default async function ReportsPage({
               <CardTitle>Horas rateadas por centro de custo</CardTitle>
               <CardDescription>
                 Horas lançadas direto no centro de custo somadas à fração dos
-                projetos Semear com rateio.
+                projetos com rateio.
               </CardDescription>
             </CardHeader>
             <CardContent>
