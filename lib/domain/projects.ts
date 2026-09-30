@@ -134,29 +134,100 @@ export async function getProjectAny(
   };
 }
 
+function compareCostCenterCode(left: string, right: string) {
+  const leftCode = Number(left);
+  const rightCode = Number(right);
+  if (
+    Number.isFinite(leftCode) &&
+    Number.isFinite(rightCode) &&
+    leftCode !== rightCode
+  ) {
+    return leftCode - rightCode;
+  }
+  return left.localeCompare(right, "pt-BR", { numeric: true });
+}
+
 export async function listProjects(
   query?: string,
   options?: { includePrivateManual?: boolean },
 ) {
   const search = query?.trim();
-  const manualProjects = await prisma.manualProject.findMany({
-    where: {
-      active: true,
-      ...(options?.includePrivateManual ? {} : { availableToAll: true }),
-      ...(search
-        ? { name: { contains: search, mode: "insensitive" as const } }
-        : {}),
-    },
-    select: { id: true, name: true, code: true, billableByDefault: true },
-    orderBy: { name: "asc" },
-  });
+  const nameOrCode = search
+    ? {
+        OR: [
+          { name: { contains: search, mode: "insensitive" as const } },
+          { code: { contains: search, mode: "insensitive" as const } },
+        ],
+      }
+    : {};
 
-  return manualProjects.map((project) => ({
+  const [costCenters, manualProjects] = await Promise.all([
+    prisma.costCenter.findMany({
+      where: { active: true, ...nameOrCode },
+      select: { id: true, name: true, code: true },
+    }),
+    prisma.manualProject.findMany({
+      where: {
+        active: true,
+        ...(options?.includePrivateManual ? {} : { availableToAll: true }),
+        ...nameOrCode,
+      },
+      select: { id: true, name: true, code: true, billableByDefault: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
+
+  const centers = costCenters
+    .map((costCenter) => ({
+      id: `cost-center:${costCenter.id}`,
+      kind: "cost-center" as const,
+      name: costCenter.name,
+      code: costCenter.code,
+      billableByDefault: true,
+    }))
+    .sort((left, right) => compareCostCenterCode(left.code, right.code));
+
+  const manuals = manualProjects.map((project) => ({
     id: `manual:${project.id}`,
+    kind: "manual" as const,
     name: project.name,
     code: project.code,
     billableByDefault: project.billableByDefault,
   }));
+
+  return [...centers, ...manuals];
+}
+
+export function toTimeProjects(
+  costCenters: Array<{ id: string; code: string; name: string }>,
+  manuals: Array<{
+    id: string;
+    name: string;
+    code?: string | null;
+    billableByDefault?: boolean;
+  }>,
+) {
+  const centers = [...costCenters]
+    .sort((left, right) => compareCostCenterCode(left.code, right.code))
+    .map((costCenter) => ({
+      id: costCenter.id.startsWith("cost-center:")
+        ? costCenter.id
+        : `cost-center:${costCenter.id}`,
+      kind: "cost-center" as const,
+      name: costCenter.name,
+      code: costCenter.code,
+      billableByDefault: true,
+    }));
+  const projects = manuals.map((project) => ({
+    id: project.id.startsWith("manual:")
+      ? project.id
+      : `manual:${project.id}`,
+    kind: "manual" as const,
+    name: project.name,
+    code: project.code ?? null,
+    billableByDefault: project.billableByDefault ?? false,
+  }));
+  return [...centers, ...projects];
 }
 
 export async function listProjectCatalog(options?: {
@@ -187,6 +258,14 @@ export async function listProjectCatalog(options?: {
         hourlyRates: {
           orderBy: { effectiveFrom: "desc" },
           select: { amountCents: true, effectiveFrom: true },
+        },
+        costCenterShares: {
+          orderBy: { shareBps: "desc" },
+          select: {
+            shareBps: true,
+            costCenterId: true,
+            costCenter: { select: { code: true, name: true } },
+          },
         },
       },
       orderBy: [{ active: "desc" }, { name: "asc" }],
@@ -233,6 +312,12 @@ export async function listProjectCatalog(options?: {
         hourlyRateEffectiveFrom: currentRate?.effectiveFrom ?? null,
         latestHourlyRateEffectiveFrom: latestRate?.effectiveFrom ?? null,
         monthSeconds: monthSeconds.get(id) ?? 0,
+        rateio: project.costCenterShares.map((share) => ({
+          costCenterId: share.costCenterId,
+          code: share.costCenter.code,
+          name: share.costCenter.name,
+          shareBps: share.shareBps,
+        })),
       };
     })
     .sort((left, right) => right.monthSeconds - left.monthSeconds);

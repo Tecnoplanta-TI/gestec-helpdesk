@@ -28,7 +28,7 @@ import {
   deleteCostCenter,
   deleteManualProject,
 } from "@/lib/domain/catalog-delete";
-import { listProjectCatalog } from "@/lib/domain/projects";
+import { listProjectCatalog, listProjects } from "@/lib/domain/projects";
 import { prisma } from "@/lib/prisma";
 
 const runId = randomUUID();
@@ -453,6 +453,21 @@ describe.runIf(Boolean(process.env.DATABASE_URL))(
           requestKey: `timer-private:${runId}`,
         }),
       ).rejects.toMatchObject({ status: 403, code: "PROJECT_FORBIDDEN" });
+    });
+
+    it("inclui centros de custo no seletor da Jornada", async () => {
+      const selectable = await listProjects(undefined, {
+        includePrivateManual: true,
+      });
+      const selected = selectable.find(
+        (project) => project.id === `cost-center:${costCenterId}`,
+      );
+
+      expect(selected).toMatchObject({
+        kind: "cost-center",
+        code: costCenterCode,
+        billableByDefault: true,
+      });
     });
 
     it("exibe no catálogo somente o valor-hora já vigente", async () => {

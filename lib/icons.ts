@@ -1,33 +1,39 @@
-export { default as Add01Icon } from "@hugeicons/core-free-icons/Add01Icon";
-export { default as Alert02Icon } from "@hugeicons/core-free-icons/Alert02Icon";
-export { default as ArrowDown01Icon } from "@hugeicons/core-free-icons/ArrowDown01Icon";
-export { default as ArrowDownIcon } from "@hugeicons/core-free-icons/ArrowDown01Icon";
-export { default as ArrowLeft01Icon } from "@hugeicons/core-free-icons/ArrowLeft01Icon";
-export { default as ArrowLeftIcon } from "@hugeicons/core-free-icons/ArrowLeft01Icon";
-export { default as ArrowRight01Icon } from "@hugeicons/core-free-icons/ArrowRight01Icon";
-export { default as ArrowRightIcon } from "@hugeicons/core-free-icons/ArrowRight01Icon";
-export { default as ArrowUp01Icon } from "@hugeicons/core-free-icons/ArrowUp01Icon";
-export { default as Cancel01Icon } from "@hugeicons/core-free-icons/Cancel01Icon";
-export { default as ChartBarLineIcon } from "@hugeicons/core-free-icons/ChartBarLineIcon";
-export { default as CheckmarkCircle02Icon } from "@hugeicons/core-free-icons/CheckmarkCircle02Icon";
-export { default as Clock01Icon } from "@hugeicons/core-free-icons/Clock01Icon";
-export { default as ComputerIcon } from "@hugeicons/core-free-icons/ComputerIcon";
-export { default as DollarCircleIcon } from "@hugeicons/core-free-icons/DollarCircleIcon";
-export { default as Download01Icon } from "@hugeicons/core-free-icons/Download01Icon";
-export { default as FilterIcon } from "@hugeicons/core-free-icons/FilterIcon";
-export { default as InboxIcon } from "@hugeicons/core-free-icons/InboxIcon";
-export { default as InformationCircleIcon } from "@hugeicons/core-free-icons/InformationCircleIcon";
-export { default as KanbanIcon } from "@hugeicons/core-free-icons/KanbanIcon";
-export { default as Loading03Icon } from "@hugeicons/core-free-icons/Loading03Icon";
-export { default as MoreHorizontalCircle01Icon } from "@hugeicons/core-free-icons/MoreHorizontalCircle01Icon";
-export { default as MoreVerticalIcon } from "@hugeicons/core-free-icons/MoreVerticalIcon";
-export { default as MultiplicationSignCircleIcon } from "@hugeicons/core-free-icons/MultiplicationSignCircleIcon";
-export { default as PlayIcon } from "@hugeicons/core-free-icons/PlayIcon";
-export { default as SearchIcon } from "@hugeicons/core-free-icons/Search01Icon";
-export { default as DashboardSquare01Icon } from "@hugeicons/core-free-icons/DashboardSquare01Icon";
-export { default as Settings02Icon } from "@hugeicons/core-free-icons/Settings02Icon";
-export { default as SidebarLeftIcon } from "@hugeicons/core-free-icons/SidebarLeftIcon";
-export { default as StopIcon } from "@hugeicons/core-free-icons/StopIcon";
-export { default as Tick02Icon } from "@hugeicons/core-free-icons/Tick02Icon";
-export { default as Ticket01Icon } from "@hugeicons/core-free-icons/Ticket01Icon";
-export { default as UnfoldMoreIcon } from "@hugeicons/core-free-icons/UnfoldMoreIcon";
+export {
+  Plus as Add01Icon,
+  Settings as AccountSetting01Icon,
+  TriangleAlert as Alert02Icon,
+  ChevronDown as ArrowDown01Icon,
+  ChevronDown as ArrowDownIcon,
+  ArrowLeft as ArrowLeft01Icon,
+  ArrowLeft as ArrowLeftIcon,
+  ArrowRight as ArrowRight01Icon,
+  ArrowRight as ArrowRightIcon,
+  ChevronUp as ArrowUp01Icon,
+  X as Cancel01Icon,
+  ChartColumn as ChartBarLineIcon,
+  CircleCheck as CheckmarkCircle02Icon,
+  Clock as Clock01Icon,
+  Monitor as ComputerIcon,
+  CircleDollarSign as DollarCircleIcon,
+  Download as Download01Icon,
+  Filter as FilterIcon,
+  Inbox as InboxIcon,
+  Info as InformationCircleIcon,
+  Kanban as KanbanIcon,
+  Loader as Loading03Icon,
+  Ellipsis as MoreHorizontalCircle01Icon,
+  EllipsisVertical as MoreVerticalIcon,
+  Bell as Notification01Icon,
+  CircleX as MultiplicationSignCircleIcon,
+  Play as PlayIcon,
+  Search as SearchIcon,
+  LayoutDashboard as DashboardSquare01Icon,
+  Settings as Settings02Icon,
+  PanelLeft as SidebarLeftIcon,
+  Square as StopIcon,
+  LogOut as Logout01Icon,
+  Check as Tick02Icon,
+  Ticket as Ticket01Icon,
+  ChevronsUpDown as UnfoldMoreIcon,
+  LogIn as Login02Icon,
+} from "lucide-react";

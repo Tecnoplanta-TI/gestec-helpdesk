@@ -6,8 +6,21 @@ export const dynamic = "force-dynamic";
 
 export default async function AdminCostCentersPage() {
   await requirePagePermission("admin:manage");
-  const costCenters = await prisma.costCenter.findMany({
-    orderBy: [{ active: "desc" }, { name: "asc" }],
+  const costCenters = (
+    await prisma.costCenter.findMany({
+      orderBy: [{ active: "desc" }, { code: "asc" }],
+    })
+  ).sort((left, right) => {
+    const leftCode = Number(left.code);
+    const rightCode = Number(right.code);
+    if (
+      Number.isFinite(leftCode) &&
+      Number.isFinite(rightCode) &&
+      leftCode !== rightCode
+    ) {
+      return leftCode - rightCode;
+    }
+    return left.code.localeCompare(right.code, "pt-BR", { numeric: true });
   });
   return (
     <CostCenterManager

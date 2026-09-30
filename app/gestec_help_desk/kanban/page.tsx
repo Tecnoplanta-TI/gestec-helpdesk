@@ -4,6 +4,7 @@ import { TicketStatus } from "@prisma/client";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { requirePermission } from "@/lib/auth/session";
+import { ticketVisibilityWhere } from "@/lib/auth/ticket-access";
 import {
   kanbanColumns,
   normalizeRequestType,
@@ -16,16 +17,21 @@ import { prisma } from "@/lib/prisma";
 export const dynamic = "force-dynamic";
 
 export default async function KanbanPage() {
-  await requirePermission("tickets:view");
+  const session = await requirePermission("tickets:view");
   const tickets = await prisma.ticket.findMany({
     where: {
-      status: {
-        notIn: [
-          TicketStatus.CLOSED,
-          TicketStatus.CANCELLED,
-          TicketStatus.RESOLVED,
-        ],
-      },
+      AND: [
+        ticketVisibilityWhere(session),
+        {
+          status: {
+            notIn: [
+              TicketStatus.CLOSED,
+              TicketStatus.CANCELLED,
+              TicketStatus.RESOLVED,
+            ],
+          },
+        },
+      ],
     },
     select: {
       id: true,

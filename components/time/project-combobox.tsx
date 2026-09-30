@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 
-import { Button } from "@/components/ui/button";
 import {
   Command,
   CommandEmpty,
@@ -16,22 +15,62 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { ArrowDown01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { UnfoldMoreIcon } from "@/lib/icons";
+import { HugeiconsIcon } from "@/components/icon";
+import { rankProjectQuery } from "@/lib/domain/project-search";
 import { cn } from "@/lib/utils";
 
 export type TimeProject = {
   id: string;
+  kind?: "cost-center" | "manual";
   name: string;
   code: string | null;
   billableByDefault: boolean;
 };
 
+function projectLabel(project: TimeProject) {
+  if (project.kind === "cost-center" && project.code) {
+    return `${project.code} · ${project.name}`;
+  }
+  return project.code ? `${project.name} · ${project.code}` : project.name;
+}
+
+function isCostCenter(project: TimeProject) {
+  return (
+    project.kind === "cost-center" || project.id.startsWith("cost-center:")
+  );
+}
+
+function projectSearchValue(project: TimeProject) {
+  return `${project.name} ${project.code ?? ""} ${project.id}`;
+}
+
+function projectKeywords(project: TimeProject) {
+  return [project.name, project.code ?? ""];
+}
+
+function sortProjectsByQuery(projects: TimeProject[], query: string) {
+  if (!query.trim()) return projects;
+  return [...projects].sort(
+    (left, right) =>
+      rankProjectQuery(
+        query,
+        projectSearchValue(right),
+        projectKeywords(right),
+      ) -
+      rankProjectQuery(
+        query,
+        projectSearchValue(left),
+        projectKeywords(left),
+      ),
+  );
+}
+
 export function ProjectCombobox({
   projects,
   recentProjectIds,
   value,
-  placeholder = "Selecionar projeto",
+  placeholder = "Selecionar centro de custo ou projeto",
   disabled = false,
   allowClear = false,
   onChange,
@@ -45,6 +84,7 @@ export function ProjectCombobox({
   onChange: (projectId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
   const selected = projects.find((project) => project.id === value);
   const recent = useMemo(() => {
     const byId = new Map(projects.map((project) => [project.id, project]));
@@ -57,6 +97,18 @@ export function ProjectCombobox({
     const recentIds = new Set(recent.map((project) => project.id));
     return projects.filter((project) => !recentIds.has(project.id));
   }, [projects, recent]);
+  const rankedRecent = useMemo(
+    () => sortProjectsByQuery(recent, search),
+    [recent, search],
+  );
+  const rankedRemaining = useMemo(
+    () => sortProjectsByQuery(remaining, search),
+    [remaining, search],
+  );
+  const rankedProjects = useMemo(
+    () => sortProjectsByQuery(projects, search),
+    [projects, search],
+  );
 
   function select(projectId: string) {
     onChange(projectId);
@@ -64,31 +116,53 @@ export function ProjectCombobox({
   }
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setSearch("");
+      }}
+    >
       <PopoverTrigger
         disabled={disabled}
         render={
-          <Button
+          <button
             type="button"
-            variant="outline"
             disabled={disabled}
-            className="min-w-0 flex-1 justify-between font-normal"
             aria-label="Centro de custo ou projeto"
+            className={cn(
+              "flex h-9 w-fit max-w-full min-w-0 items-center justify-between gap-1.5 rounded-3xl border border-transparent bg-input/50 px-3 py-2 text-sm whitespace-nowrap transition-[color,box-shadow,background-color] outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-50",
+            )}
           />
         }
       >
-        <span className={cn("truncate", !selected && "text-muted-foreground")}>
-          {selected
-            ? `${selected.name}${selected.code ? ` · ${selected.code}` : ""}`
-            : placeholder}
+        <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
+          {selected ? projectLabel(selected) : placeholder}
         </span>
-        <HugeiconsIcon icon={ArrowDown01Icon} className="size-4 opacity-60" />
+        <HugeiconsIcon
+          icon={UnfoldMoreIcon}
+          strokeWidth={2}
+          className="pointer-events-none size-4 shrink-0 text-muted-foreground"
+        />
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-80 gap-0 p-0">
-        <Command>
-          <CommandInput placeholder="Buscar por nome ou código" />
+      <PopoverContent
+        align="start"
+        className="w-80 gap-0 overflow-hidden p-0"
+      >
+        <Command
+          filter={(value, query, keywords) =>
+            rankProjectQuery(query, value, keywords)
+          }
+        >
+          <CommandInput
+            placeholder="Buscar por nome ou código"
+            value={search}
+            onValueChange={setSearch}
+          />
           <CommandList>
-            <CommandEmpty>Nenhum projeto encontrado.</CommandEmpty>
+            <CommandEmpty>
+              Nenhum centro de custo ou projeto encontrado.
+            </CommandEmpty>
             {allowClear && value ? (
               <CommandGroup>
                 <CommandItem value="limpar-filtro" onSelect={() => select("")}>
@@ -96,34 +170,52 @@ export function ProjectCombobox({
                 </CommandItem>
               </CommandGroup>
             ) : null}
-            {recent.length > 0 ? (
+            {rankedRecent.length > 0 ? (
               <CommandGroup heading="Recentes">
-                {recent.map((project) => (
+                {rankedRecent.map((project) => (
                   <CommandItem
                     key={`recent-${project.id}`}
-                    value={`recentes ${project.name} ${project.code ?? ""} ${project.id}`}
+                    value={projectSearchValue(project)}
+                    keywords={projectKeywords(project)}
                     data-checked={value === project.id || undefined}
                     onSelect={() => select(project.id)}
                   >
-                    {project.name}
-                    {project.code ? ` · ${project.code}` : ""}
+                    {projectLabel(project)}
                   </CommandItem>
                 ))}
               </CommandGroup>
             ) : null}
-            <CommandGroup heading="Todos os projetos">
-              {(recent.length > 0 ? remaining : projects).map((project) => (
-                <CommandItem
-                  key={project.id}
-                  value={`${project.name} ${project.code ?? ""} ${project.id}`}
-                  data-checked={value === project.id || undefined}
-                  onSelect={() => select(project.id)}
+            {(["cost-center", "manual"] as const).map((kind) => {
+              const source = rankedRecent.length > 0 ? rankedRemaining : rankedProjects;
+              const items = source.filter((project) =>
+                kind === "cost-center"
+                  ? isCostCenter(project)
+                  : !isCostCenter(project),
+              );
+              if (!items.length) return null;
+              return (
+                <CommandGroup
+                  key={kind}
+                  heading={
+                    kind === "cost-center"
+                      ? "Centros de custo"
+                      : "Projetos"
+                  }
                 >
-                  {project.name}
-                  {project.code ? ` · ${project.code}` : ""}
-                </CommandItem>
-              ))}
-            </CommandGroup>
+                  {items.map((project) => (
+                    <CommandItem
+                      key={project.id}
+                      value={projectSearchValue(project)}
+                      keywords={projectKeywords(project)}
+                      data-checked={value === project.id || undefined}
+                      onSelect={() => select(project.id)}
+                    >
+                      {projectLabel(project)}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              );
+            })}
           </CommandList>
         </Command>
       </PopoverContent>

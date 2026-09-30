@@ -5,9 +5,24 @@ export function formatDateTime(value: Date | string) {
   }).format(new Date(value));
 }
 
+function padDatePart(part: number) {
+  return String(part).padStart(2, "0");
+}
+
+export function toLocalDateInput(value: Date | string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+}
+
+export function toLocalTimeInput(value: Date | string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${padDatePart(date.getHours())}:${padDatePart(date.getMinutes())}`;
+}
+
 export function currentLocalDateValue(date = new Date()) {
-  const pad = (part: number) => String(part).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  return toLocalDateInput(date);
 }
 
 export function formatDateOnly(value: Date | string) {
@@ -24,6 +39,56 @@ export function formatDateOnly(value: Date | string) {
   return new Intl.DateTimeFormat("pt-BR", {
     dateStyle: "short",
   }).format(date);
+}
+
+const UUID_LIKE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function displayPersonName(
+  name: string | null | undefined,
+  email?: string | null,
+) {
+  const label = typeof name === "string" ? name.trim() : "";
+  const fallbackEmail = typeof email === "string" ? email.trim() : "";
+  if (!label || label === "undefined" || label === "null" || UUID_LIKE.test(label)) {
+    if (fallbackEmail && fallbackEmail !== "undefined" && fallbackEmail !== "null") {
+      return fallbackEmail;
+    }
+    return "Usuário sem nome";
+  }
+  return label;
+}
+
+export function formatCatalogLabel(
+  code: string | null | undefined,
+  name: string,
+) {
+  return code ? `${code} · ${name}` : name;
+}
+
+export const RATEIO_TOTAL_BPS = 10_000;
+
+export function formatSharePercent(shareBps: number) {
+  return new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format(shareBps / 100);
+}
+
+export function formatRateioSummary(
+  shares: Array<{
+    shareBps: number;
+    code: string;
+    name: string;
+  }>,
+) {
+  if (!shares.length) return "";
+  return shares
+    .map(
+      (share) =>
+        `${formatSharePercent(share.shareBps)}% ${share.code} · ${share.name}`,
+    )
+    .join("; ");
 }
 
 export function formatDuration(totalSeconds: number) {

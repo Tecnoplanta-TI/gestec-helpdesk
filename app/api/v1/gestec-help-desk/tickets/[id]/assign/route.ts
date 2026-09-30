@@ -1,5 +1,6 @@
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
+import { assertTicketVisible } from "@/lib/auth/ticket-access";
 import { assignTicket } from "@/lib/domain/operations";
 import { assignTicketSchema } from "@/lib/domain/schemas";
 import { errorResponse, readJson } from "@/lib/http/api-error";
@@ -11,6 +12,7 @@ export async function POST(
   try {
     const session = await requirePermission("tickets:work");
     const { id } = await context.params;
+    await assertTicketVisible(session, id);
     const input = assignTicketSchema.parse(await readJson(request));
     const ticket = await assignTicket({
       ticketId: id,

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { TicketPriority, TicketStatus } from "@/lib/client-enums";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 
 import { AdminTicketCreateDialog } from "@/components/admin/ticket-create-dialog";
 import { Badge } from "@/components/ui/badge";

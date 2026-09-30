@@ -1,8 +1,9 @@
 import { Download01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
+import { AdminTimeEntryManager } from "@/components/admin/time-entry-manager";
 import {
   Card,
   CardContent,
@@ -10,14 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -28,10 +22,19 @@ import {
 } from "@/components/ui/table";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
-import { listProjectCatalog } from "@/lib/domain/projects";
-import { reportFilters } from "@/lib/domain/report-query";
-import { formatDuration, ticketStatusLabels } from "@/lib/format";
+import { listProjectCatalog, toTimeProjects } from "@/lib/domain/projects";
+import { allocateSeconds } from "@/lib/domain/project-rateio";
+import { reportTimeEntryWhere } from "@/lib/domain/report-query";
+import {
+  displayPersonName,
+  formatCatalogLabel,
+  formatDuration,
+  formatRateioSummary,
+  ticketStatusLabels,
+  timeEntrySourceLabels,
+} from "@/lib/format";
 import { prisma } from "@/lib/prisma";
+import { ReportsFiltersSheet } from "@/components/reports/reports-filters-sheet";
 
 export const dynamic = "force-dynamic";
 
@@ -60,7 +63,9 @@ export default async function ReportsPage({
   const costCenterValue = scalar(params.costCenter);
   const billableValue = scalar(params.billable);
   const ticketValue = scalar(params.ticket);
-  const userValue = scalar(params.userId);
+  const requestedUser = scalar(params.userId);
+  const userValue =
+    requestedUser && requestedUser !== "all" ? requestedUser : session.userId;
   const reportParams = new URLSearchParams({ from: fromValue, to: toValue });
   if (projectValue && projectValue !== "all")
     reportParams.set("manualProject", projectValue);
@@ -69,12 +74,14 @@ export default async function ReportsPage({
   if (billableValue && billableValue !== "all")
     reportParams.set("billable", billableValue);
   if (ticketValue) reportParams.set("ticket", ticketValue);
-  if (userValue && userValue !== "all") reportParams.set("userId", userValue);
+  // Keep the distinction between the default (current user) and an explicit
+  // request for every user in the URL passed to both the page and export.
+  reportParams.set("userId", requestedUser || session.userId);
   const {
     from,
     to,
     where: timeWhere,
-  } = reportFilters(reportParams, databaseNow);
+  } = await reportTimeEntryWhere(reportParams, databaseNow);
   const [
     ticketsByStatus,
     hoursByBillable,
@@ -83,6 +90,7 @@ export default async function ReportsPage({
     projects,
     costCenters,
     users,
+    detailedEntries,
   ] = await Promise.all([
     prisma.ticket.groupBy({
       by: ["status"],
@@ -106,18 +114,126 @@ export default async function ReportsPage({
     }),
     listProjectCatalog({
       includePrivateManual: hasPermission(session.role, "time:manage"),
+      includeInactive: true,
     }),
     prisma.costCenter.findMany({
-      where: { active: true },
-      select: { id: true, code: true, name: true },
+      select: { id: true, code: true, name: true, active: true },
       orderBy: [{ code: "asc" }, { name: "asc" }],
     }),
     prisma.userRef.findMany({
-      where: { active: true },
-      select: { id: true, name: true },
+      where: {
+        OR: [
+          { active: true },
+          { id: session.userId },
+          ...(userValue && userValue !== "all" ? [{ id: userValue }] : []),
+        ],
+      },
+      select: { id: true, name: true, email: true },
       orderBy: { name: "asc" },
     }),
+    prisma.timeEntry.findMany({
+      where: timeWhere,
+      orderBy: { startedAt: "desc" },
+      take: 500,
+      select: {
+        id: true,
+        description: true,
+        startedAt: true,
+        endedAt: true,
+        durationSeconds: true,
+        billable: true,
+        source: true,
+        status: true,
+        version: true,
+        userId: true,
+        ticketId: true,
+        costCenterId: true,
+        manualProjectId: true,
+        projectNameSnapshot: true,
+        user: { select: { name: true, email: true } },
+        ticket: { select: { number: true, externalReference: true } },
+        costCenter: { select: { code: true, name: true } },
+        manualProject: { select: { code: true, name: true } },
+      },
+    }),
   ]);
+  const projectIds = [
+    ...new Set(
+      hoursByProject
+        .map((row) => row.manualProjectId)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  const rateioShares = projectIds.length
+    ? await prisma.projectCostCenterShare.findMany({
+        where: { manualProjectId: { in: projectIds } },
+        select: {
+          manualProjectId: true,
+          costCenterId: true,
+          shareBps: true,
+          costCenter: { select: { code: true, name: true } },
+        },
+        orderBy: { shareBps: "desc" },
+      })
+    : [];
+  const sharesByProject = new Map<
+    string,
+    Array<{
+      costCenterId: string;
+      shareBps: number;
+      code: string;
+      name: string;
+    }>
+  >();
+  for (const share of rateioShares) {
+    const current = sharesByProject.get(share.manualProjectId) ?? [];
+    current.push({
+      costCenterId: share.costCenterId,
+      shareBps: share.shareBps,
+      code: share.costCenter.code,
+      name: share.costCenter.name,
+    });
+    sharesByProject.set(share.manualProjectId, current);
+  }
+  const costCenterById = new Map(
+    costCenters.map((costCenter) => [costCenter.id, costCenter]),
+  );
+  const projectById = new Map(
+    projects.map((project) => [project.id.replace(/^manual:/, ""), project]),
+  );
+  const userLabel = (user: { id: string; name: string; email: string }) =>
+    displayPersonName(user.name, user.email);
+  const activeCostCenters = costCenters.filter(
+    (costCenter) => costCenter.active || costCenter.id === costCenterValue,
+  );
+  const filterState = {
+    from: fromValue,
+    to: toValue,
+    costCenter: costCenterValue || "all",
+    manualProject: projectValue || "all",
+    billable: billableValue || "all",
+    userId: requestedUser || session.userId,
+    ticket: ticketValue,
+  };
+  const canManageTimeEntries = hasPermission(session.role, "admin:manage");
+  const serializedDetailedEntries = detailedEntries.map((entry) => ({
+    id: entry.id,
+    description: entry.description,
+    billable: entry.billable,
+    startedAt: entry.startedAt.toISOString(),
+    endedAt: entry.endedAt.toISOString(),
+    durationSeconds: entry.durationSeconds,
+    status: entry.status,
+    source: entry.source,
+    version: entry.version,
+    userId: entry.userId,
+    ticketId: entry.ticketId,
+    costCenterId: entry.costCenterId,
+    manualProjectId: entry.manualProjectId,
+    user: { name: entry.user.name },
+    ticket: entry.ticket ? { number: entry.ticket.number } : null,
+    projectNameSnapshot: entry.projectNameSnapshot,
+  }));
   const totalSeconds = hoursByBillable.reduce(
     (sum, row) => sum + (row._sum.durationSeconds ?? 0),
     0,
@@ -125,276 +241,394 @@ export default async function ReportsPage({
   const billableSeconds =
     hoursByBillable.find((row) => row.billable)?._sum.durationSeconds ?? 0;
   const projectTotals = hoursByProject
-    .map((row) => ({
-      key: `${row.costCenterId ?? ""}:${row.manualProjectId ?? ""}:${row.projectNameSnapshot ?? ""}`,
-      name: row.projectNameSnapshot ?? "Pendente de classificação",
-      type: row.costCenterId
-        ? "Centro de custo"
-        : row.manualProjectId
-          ? "Projeto Semear"
-          : "Sem classificação",
-      seconds: row._sum.durationSeconds ?? 0,
-    }))
+    .map((row) => {
+      const seconds = row._sum.durationSeconds ?? 0;
+      if (row.costCenterId) {
+        const costCenter = costCenterById.get(row.costCenterId);
+        return {
+          key: `cc:${row.costCenterId}`,
+          name: costCenter
+            ? formatCatalogLabel(costCenter.code, costCenter.name)
+            : (row.projectNameSnapshot ?? "Centro de custo"),
+          type: "Centro de custo",
+          rateio: "—",
+          seconds,
+        };
+      }
+      if (row.manualProjectId) {
+        const project = projectById.get(row.manualProjectId);
+        const shares = sharesByProject.get(row.manualProjectId) ?? [];
+        return {
+          key: `project:${row.manualProjectId}`,
+          name: project
+            ? formatCatalogLabel(project.code, project.name)
+            : (row.projectNameSnapshot ?? "Projeto"),
+          type: "Projeto",
+          rateio: shares.length ? formatRateioSummary(shares) : "Sem rateio",
+          seconds,
+        };
+      }
+      return {
+        key: `unclassified:${row.projectNameSnapshot ?? ""}`,
+        name: row.projectNameSnapshot ?? "Pendente de classificação",
+        type: "Sem classificação",
+        rateio: "—",
+        seconds,
+      };
+    })
+    .sort((left, right) => right.seconds - left.seconds);
+
+  const allocatedTotals = new Map<string, { name: string; seconds: number }>();
+  function addAllocated(key: string, name: string, seconds: number) {
+    const current = allocatedTotals.get(key);
+    if (current) {
+      current.seconds += seconds;
+      return;
+    }
+    allocatedTotals.set(key, { name, seconds });
+  }
+  for (const row of hoursByProject) {
+    const seconds = row._sum.durationSeconds ?? 0;
+    if (row.costCenterId) {
+      const costCenter = costCenterById.get(row.costCenterId);
+      addAllocated(
+        `cc:${row.costCenterId}`,
+        costCenter
+          ? formatCatalogLabel(costCenter.code, costCenter.name)
+          : (row.projectNameSnapshot ?? "Centro de custo"),
+        seconds,
+      );
+      continue;
+    }
+    if (row.manualProjectId) {
+      const shares = sharesByProject.get(row.manualProjectId) ?? [];
+      if (!shares.length) {
+        addAllocated("sem-rateio", "Projetos sem rateio", seconds);
+        continue;
+      }
+      for (const share of allocateSeconds(seconds, shares)) {
+        addAllocated(
+          `cc:${share.costCenterId}`,
+          formatCatalogLabel(share.code, share.name),
+          share.seconds,
+        );
+      }
+      continue;
+    }
+    addAllocated(
+      "unclassified",
+      row.projectNameSnapshot ?? "Pendente de classificação",
+      seconds,
+    );
+  }
+  const allocatedRows = [...allocatedTotals.entries()]
+    .map(([key, row]) => ({ key, ...row }))
     .sort((left, right) => right.seconds - left.seconds);
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold tracking-tight">Relatórios</h1>
           <p className="text-sm text-muted-foreground">
             Indicadores calculados a partir dos dados operacionais e do período
             selecionado.
           </p>
         </div>
-        <Button
-          render={
-            <a
-              href={`/api/v1/gestec-help-desk/reports/time-entries.xlsx?${reportParams.toString()}`}
-              download
-            />
-          }
-        >
-          <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />{" "}
-          Exportar apontamentos (.xlsx)
-        </Button>
-      </div>
-      <Card>
-        <CardContent className="pt-6">
-          <form className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              De
-              <Input type="date" name="from" defaultValue={fromValue} />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Até
-              <Input type="date" name="to" defaultValue={toValue} />
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Centro de custo
-              <Select
-                name="costCenter"
-                defaultValue={costCenterValue || "all"}
-                items={Object.fromEntries([
-                  ["all", "Todos"],
-                  ...costCenters.map((costCenter) => [
-                    costCenter.id,
-                    `${costCenter.code} · ${costCenter.name}`,
-                  ]),
-                ])}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {costCenters.map((costCenter) => (
-                    <SelectItem key={costCenter.id} value={costCenter.id}>
-                      {costCenter.code} · {costCenter.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Projeto Semear
-              <Select
-                name="manualProject"
-                defaultValue={projectValue || "all"}
-                items={Object.fromEntries([
-                  ["all", "Todos"],
-                  ...projects.map((project) => [
-                    project.id.slice(7),
-                    project.name,
-                  ]),
-                ])}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos</SelectItem>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id.slice(7)}>
-                      {project.code} · {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Faturabilidade
-              <Select
-                name="billable"
-                defaultValue={billableValue || "all"}
-                items={{
-                  all: "Todas",
-                  billable: "Faturável",
-                  "non-billable": "Não faturável",
-                }}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  <SelectItem value="billable">Faturável</SelectItem>
-                  <SelectItem value="non-billable">Não faturável</SelectItem>
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Usuário
-              <Select
-                name="userId"
-                defaultValue={userValue || "all"}
-                items={Object.fromEntries([
-                  ["all", "Todos os usuários"],
-                  ...users.map((user) => [user.id, user.name]),
-                ])}
-              >
-                <SelectTrigger className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todos os usuários</SelectItem>
-                  {users.map((user) => (
-                    <SelectItem key={user.id} value={user.id}>
-                      {user.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
-              Ticket ou descrição
-              <Input
-                name="ticket"
-                defaultValue={ticketValue}
-                placeholder="#1842 ou termo"
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:flex-wrap sm:justify-end">
+          <ReportsFiltersSheet
+            filters={filterState}
+            costCenters={activeCostCenters.map((costCenter) => ({
+              value: costCenter.id,
+              label: formatCatalogLabel(costCenter.code, costCenter.name),
+            }))}
+            projects={projects.map((project) => ({
+              value: project.id.replace(/^manual:/, ""),
+              label: formatCatalogLabel(project.code, project.name),
+            }))}
+            users={users.map((user) => ({
+              value: user.id,
+              label: userLabel(user),
+            }))}
+          />
+          <Button
+            render={
+              <a
+                href={`/api/v1/gestec-help-desk/reports/time-entries.xlsx?${reportParams.toString()}`}
+                download
               />
-            </label>
-            <Button type="submit" className="self-end">
-              Aplicar filtros
-            </Button>
-          </form>
-          <p className="mt-3 text-xs text-muted-foreground">
-            Centro de custo, Projeto Semear, faturabilidade, usuário e ticket ou
-            descrição refinam os apontamentos, os totais de horas e a
-            exportação. Indicadores de tickets consideram o período informado.
-          </p>
-        </CardContent>
-      </Card>
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <CardHeader>
-            <CardDescription>Tickets no período</CardDescription>
-            <CardTitle className="text-3xl">
-              {ticketsByStatus.reduce((sum, item) => sum + item._count, 0)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Horas registradas</CardDescription>
-            <CardTitle className="text-3xl tabular-nums">
-              {formatDuration(totalSeconds)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Horas faturáveis</CardDescription>
-            <CardTitle className="text-3xl tabular-nums">
-              {formatDuration(billableSeconds)}
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardDescription>Média das avaliações</CardDescription>
-            <CardTitle className="text-3xl">
-              {evaluations._count
-                ? `${evaluations._avg.score?.toFixed(1)}/10`
-                : "Sem dados"}
-            </CardTitle>
-          </CardHeader>
-        </Card>
+            }
+          >
+            <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />
+            Exportar (.xlsx)
+          </Button>
+        </div>
       </div>
-      <div className="grid gap-6 xl:grid-cols-2">
-        <Card>
-          <CardHeader>
-            <CardTitle>Tickets por status</CardTitle>
-            <CardDescription>
-              Distribuição de aberturas no período.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Quantidade</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {ticketsByStatus.map((item) => (
-                  <TableRow key={item.status}>
-                    <TableCell>{ticketStatusLabels[item.status]}</TableCell>
-                    <TableCell className="text-right tabular-nums">
-                      {item._count}
-                    </TableCell>
+      <Tabs defaultValue="summary" className="gap-6">
+        <TabsList aria-label="Visão do relatório">
+          <TabsTrigger value="summary">Resumido</TabsTrigger>
+          <TabsTrigger value="detailed">Detalhado</TabsTrigger>
+        </TabsList>
+        <TabsContent value="summary" className="flex flex-col gap-6">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <Card>
+              <CardHeader>
+                <CardDescription>Tickets no período</CardDescription>
+                <CardTitle className="text-3xl">
+                  {ticketsByStatus.reduce((sum, item) => sum + item._count, 0)}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Horas registradas</CardDescription>
+                <CardTitle className="text-3xl tabular-nums">
+                  {formatDuration(totalSeconds)}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Horas faturáveis</CardDescription>
+                <CardTitle className="text-3xl tabular-nums">
+                  {formatDuration(billableSeconds)}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardDescription>Média das avaliações</CardDescription>
+                <CardTitle className="text-3xl">
+                  {evaluations._count
+                    ? `${evaluations._avg.score?.toFixed(1)}/10`
+                    : "Sem dados"}
+                </CardTitle>
+              </CardHeader>
+            </Card>
+          </div>
+          <div className="grid gap-6 xl:grid-cols-2">
+            <Card>
+              <CardHeader>
+                <CardTitle>Tickets por status</CardTitle>
+                <CardDescription>
+                  Distribuição de aberturas no período.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Status</TableHead>
+                      <TableHead className="text-right">Quantidade</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {ticketsByStatus.map((item) => (
+                      <TableRow key={item.status}>
+                        <TableCell>{ticketStatusLabels[item.status]}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {item._count}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Horas por centro de custo e projeto</CardTitle>
+                <CardDescription>
+                  Projetos mostram o rateio cadastrado; a duração é a
+                  hora original apontada.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Classificação</TableHead>
+                      <TableHead>Tipo</TableHead>
+                      <TableHead>Rateio</TableHead>
+                      <TableHead className="text-right">Duração</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {projectTotals.length ? (
+                      projectTotals.map((item) => (
+                        <TableRow key={item.key}>
+                          <TableCell>{item.name}</TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {item.type}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {item.rateio}
+                          </TableCell>
+                          <TableCell className="text-right font-mono tabular-nums">
+                            {formatDuration(item.seconds)}
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    ) : (
+                      <TableRow>
+                        <TableCell
+                          colSpan={4}
+                          className="h-24 text-center text-muted-foreground"
+                        >
+                          Sem apontamentos no período.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          </div>
+          <Card>
+            <CardHeader>
+              <CardTitle>Horas rateadas por centro de custo</CardTitle>
+              <CardDescription>
+                Horas lançadas direto no centro de custo somadas à fração dos
+                projetos com rateio.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Centro de custo</TableHead>
+                    <TableHead className="text-right">Duração</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>Horas por centro de custo e projeto</CardTitle>
-            <CardDescription>
-              Base quantitativa para gestão e cobrança; valores monetários não
-              foram definidos.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Classificação</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Duração</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {projectTotals.length ? (
-                  projectTotals.map((item) => (
-                    <TableRow key={item.key}>
-                      <TableCell>{item.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {item.type}
-                      </TableCell>
-                      <TableCell className="text-right font-mono tabular-nums">
-                        {formatDuration(item.seconds)}
+                </TableHeader>
+                <TableBody>
+                  {allocatedRows.length ? (
+                    allocatedRows.map((item) => (
+                      <TableRow key={item.key}>
+                        <TableCell>{item.name}</TableCell>
+                        <TableCell className="text-right font-mono tabular-nums">
+                          {formatDuration(item.seconds)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={2}
+                        className="h-24 text-center text-muted-foreground"
+                      >
+                        Sem apontamentos no período.
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={3}
-                      className="h-24 text-center text-muted-foreground"
-                    >
-                      Sem apontamentos no período.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
-      </div>
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        <TabsContent value="detailed" className="flex flex-col gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">Apontamentos detalhados</h2>
+            <p className="text-sm text-muted-foreground">
+              {detailedEntries.length === 500
+                ? "Exibindo os 500 apontamentos mais recentes do período."
+                : `${detailedEntries.length} apontamento(s) no período.`}
+            </p>
+          </div>
+          {canManageTimeEntries ? (
+            <AdminTimeEntryManager
+              entries={serializedDetailedEntries}
+              users={users.map((user) => ({ id: user.id, name: user.name }))}
+              projects={toTimeProjects(costCenters, projects)}
+              currentUserId={session.userId}
+            />
+          ) : (
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Data e hora</TableHead>
+                        <TableHead>Descrição</TableHead>
+                        <TableHead>Classificação</TableHead>
+                        <TableHead>Usuário</TableHead>
+                        <TableHead>Ticket</TableHead>
+                        <TableHead>Origem</TableHead>
+                        <TableHead className="text-right">Duração</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {detailedEntries.length ? (
+                        detailedEntries.map((entry) => {
+                          const classification = entry.costCenter
+                            ? formatCatalogLabel(
+                                entry.costCenter.code,
+                                entry.costCenter.name,
+                              )
+                            : entry.manualProject
+                              ? formatCatalogLabel(
+                                  entry.manualProject.code,
+                                  entry.manualProject.name,
+                                )
+                              : (entry.projectNameSnapshot ??
+                                "Sem classificação");
+                          return (
+                            <TableRow key={entry.id}>
+                              <TableCell className="whitespace-nowrap tabular-nums">
+                                {format(entry.startedAt, "dd/MM/yyyy HH:mm")}
+                              </TableCell>
+                              <TableCell className="min-w-64">
+                                <p className="max-w-96 truncate font-medium">
+                                  {entry.description || "Sem descrição"}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {entry.billable
+                                    ? "Faturável"
+                                    : "Não faturável"}
+                                </p>
+                              </TableCell>
+                              <TableCell className="min-w-52">
+                                {classification}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap">
+                                {displayPersonName(
+                                  entry.user.name,
+                                  entry.user.email,
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                {entry.ticket
+                                  ? `#${entry.ticket.number}${entry.ticket.externalReference ? ` · ${entry.ticket.externalReference}` : ""}`
+                                  : "—"}
+                              </TableCell>
+                              <TableCell className="whitespace-nowrap text-muted-foreground">
+                                {timeEntrySourceLabels[entry.source] ??
+                                  entry.source}
+                              </TableCell>
+                              <TableCell className="text-right font-mono tabular-nums">
+                                {formatDuration(entry.durationSeconds)}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell
+                            colSpan={7}
+                            className="h-24 text-center text-muted-foreground"
+                          >
+                            Sem apontamentos no período.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -21,7 +21,12 @@ export async function deleteCostCenter(id: string, actorId: string) {
     where: { id },
     include: {
       _count: {
-        select: { tickets: true, timeEntries: true, activeTimers: true },
+        select: {
+          tickets: true,
+          timeEntries: true,
+          activeTimers: true,
+          projectShares: true,
+        },
       },
     },
   });
@@ -34,7 +39,8 @@ export async function deleteCostCenter(id: string, actorId: string) {
   if (
     item._count.tickets ||
     item._count.timeEntries ||
-    item._count.activeTimers
+    item._count.activeTimers ||
+    item._count.projectShares
   )
     throw IN_USE;
 

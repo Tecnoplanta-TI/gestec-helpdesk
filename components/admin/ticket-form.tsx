@@ -6,6 +6,7 @@ import Link from "next/link";
 import { TicketPriority, TicketStatus } from "@/lib/client-enums";
 import { toast } from "sonner";
 
+import { DateTimeField } from "@/components/date-field";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import {
@@ -27,7 +28,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import {
   kanbanColumns,
   normalizeRequestType,
@@ -698,59 +699,50 @@ export function AdminTicketForm({
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-ticket-opened">Aberto em</FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-ticket-opened"
-                type="datetime-local"
                 value={form.openedAt}
-                onChange={(event) => update("openedAt", event.target.value)}
+                onChange={(value) => update("openedAt", value)}
               />
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-ticket-first">
                 Prazo do 1º contato
               </FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-ticket-first"
-                type="datetime-local"
                 value={form.firstContactDeadline}
-                onChange={(event) =>
-                  update("firstContactDeadline", event.target.value)
-                }
+                onChange={(value) => update("firstContactDeadline", value)}
               />
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-ticket-sla">
                 Prazo de serviço
               </FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-ticket-sla"
-                type="datetime-local"
                 value={form.serviceDeadline}
-                onChange={(event) =>
-                  update("serviceDeadline", event.target.value)
-                }
+                onChange={(value) => update("serviceDeadline", value)}
               />
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-ticket-resolved">
                 Resolvido em
               </FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-ticket-resolved"
-                type="datetime-local"
                 value={form.resolvedAt}
-                onChange={(event) => update("resolvedAt", event.target.value)}
+                onChange={(value) => update("resolvedAt", value)}
               />
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-ticket-closed">
                 Concluído em
               </FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-ticket-closed"
-                type="datetime-local"
                 value={form.closedAt}
-                onChange={(event) => update("closedAt", event.target.value)}
+                onChange={(value) => update("closedAt", value)}
               />
             </Field>
             <Field className="md:col-span-2">
@@ -876,15 +868,14 @@ export function AdminTicketForm({
                   <FieldLabel htmlFor={`work-start-${period.id}`}>
                     Início
                   </FieldLabel>
-                  <Input
+                  <DateTimeField
                     id={`work-start-${period.id}`}
-                    type="datetime-local"
                     value={period.startedAt}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setWorkPeriods((current) =>
                         current.map((item, itemIndex) =>
                           itemIndex === index
-                            ? { ...item, startedAt: event.target.value }
+                            ? { ...item, startedAt: value }
                             : item,
                         ),
                       )
@@ -893,15 +884,14 @@ export function AdminTicketForm({
                 </Field>
                 <Field>
                   <FieldLabel htmlFor={`work-end-${period.id}`}>Fim</FieldLabel>
-                  <Input
+                  <DateTimeField
                     id={`work-end-${period.id}`}
-                    type="datetime-local"
                     value={period.endedAt}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setWorkPeriods((current) =>
                         current.map((item, itemIndex) =>
                           itemIndex === index
-                            ? { ...item, endedAt: event.target.value }
+                            ? { ...item, endedAt: value }
                             : item,
                         ),
                       )
@@ -912,15 +902,14 @@ export function AdminTicketForm({
                   <FieldLabel htmlFor={`work-paused-${period.id}`}>
                     Pausado em
                   </FieldLabel>
-                  <Input
+                  <DateTimeField
                     id={`work-paused-${period.id}`}
-                    type="datetime-local"
                     value={period.pausedAt}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setWorkPeriods((current) =>
                         current.map((item, itemIndex) =>
                           itemIndex === index
-                            ? { ...item, pausedAt: event.target.value }
+                            ? { ...item, pausedAt: value }
                             : item,
                         ),
                       )

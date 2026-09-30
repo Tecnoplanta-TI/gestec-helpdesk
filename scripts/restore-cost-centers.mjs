@@ -12,7 +12,32 @@ function normalizeName(name) {
     .toLowerCase();
 }
 
+async function migrateAccountingCode() {
+  const legacy = await prisma.costCenter.findUnique({
+    where: { code: "42" },
+    select: { id: true, name: true },
+  });
+  const current = await prisma.costCenter.findUnique({
+    where: { code: "43" },
+    select: { id: true },
+  });
+
+  if (legacy && !current) {
+    await prisma.costCenter.update({
+      where: { id: legacy.id },
+      data: {
+        code: "43",
+        name: "Contabilidade",
+        normalizedName: normalizeName("Contabilidade"),
+        active: true,
+      },
+    });
+  }
+}
+
 async function main() {
+  await migrateAccountingCode();
+
   let created = 0;
   let updated = 0;
 

@@ -20,24 +20,27 @@ export function TimeDashboard({
   weekSeconds,
   monthSeconds,
   billableSeconds,
-  monthlyGoalSeconds,
+  goalThroughTodaySeconds,
   team,
 }: {
   todaySeconds: number;
   weekSeconds: number;
   monthSeconds: number;
   billableSeconds: number;
-  monthlyGoalSeconds: number;
+  goalThroughTodaySeconds: number;
   team: Member[];
 }) {
-  const monthPercent = goalProgressPercent(monthSeconds, monthlyGoalSeconds);
+  const monthPercent = goalProgressPercent(
+    monthSeconds,
+    goalThroughTodaySeconds,
+  );
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Painel</h1>
         <p className="text-sm text-muted-foreground">
-          Acompanhe totais, meta do mês e a atividade da equipe.
+          Acompanhe totais, o ritmo da meta mensal e a atividade da equipe.
         </p>
       </div>
 
@@ -53,7 +56,7 @@ export function TimeDashboard({
 
       <Card>
         <CardHeader>
-          <CardTitle>Meta do mês</CardTitle>
+          <CardTitle>Ritmo da meta mensal</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           <div className="flex items-end justify-between gap-4">
@@ -62,7 +65,7 @@ export function TimeDashboard({
             </p>
             <p className="text-sm text-muted-foreground">
               {formatHoursMinutes(monthSeconds)} de{" "}
-              {formatHoursMinutes(monthlyGoalSeconds)}
+              {formatHoursMinutes(goalThroughTodaySeconds)} até hoje
             </p>
           </div>
           <div
@@ -71,7 +74,7 @@ export function TimeDashboard({
             aria-valuenow={monthPercent}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Progresso da meta mensal"
+            aria-label="Progresso da meta mensal até hoje"
           >
             <div
               className="h-full rounded-full bg-primary"
@@ -83,7 +86,7 @@ export function TimeDashboard({
 
       <Card>
         <CardHeader>
-          <CardTitle>Atividade da equipe</CardTitle>
+          <CardTitle>Acompanhamento da meta mensal</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {team.length === 0 ? (

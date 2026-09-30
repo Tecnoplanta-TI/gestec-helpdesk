@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
+import { assertTicketVisible } from "@/lib/auth/ticket-access";
 import {
   getAttachmentFile,
   removeTicketAttachment,
@@ -13,8 +14,9 @@ export async function GET(
   context: { params: Promise<{ id: string; attachmentId: string }> },
 ) {
   try {
-    await requirePermission("tickets:view");
+    const session = await requirePermission("tickets:view");
     const { id, attachmentId } = await context.params;
+    await assertTicketVisible(session, id);
     const { attachment, absolutePath } = await getAttachmentFile(attachmentId);
     if (attachment.ticketId !== id)
       throw new ApiError(404, "ATTACHMENT_NOT_FOUND", "Anexo não encontrado.");
@@ -41,6 +43,7 @@ export async function DELETE(
   try {
     const session = await requirePermission("tickets:work");
     const { id, attachmentId } = await context.params;
+    await assertTicketVisible(session, id);
     await removeTicketAttachment({
       attachmentId,
       ticketId: id,

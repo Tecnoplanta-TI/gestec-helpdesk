@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { AssetStatus } from "@/lib/client-enums";
 import { toast } from "sonner";
 
@@ -45,6 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Add01Icon, SearchIcon } from "@/lib/icons";
 import { apiRequest } from "@/lib/http/client";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
+import { Pencil, Trash2 } from "lucide-react";
 
 const statusLabels: Record<AssetStatus, string> = {
   IN_STOCK: "Em estoque",
@@ -265,20 +266,22 @@ export function AssetManager({
                       <TableCell>{item.assignedToName ?? "—"}</TableCell>
                       {canManage && (
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-1">
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
+                              aria-label="Editar"
                               onClick={() => startEdit(item)}
                             >
-                              Editar
+                              <Pencil />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
+                              aria-label="Excluir"
                               onClick={() => setDeleting(item)}
                             >
-                              Excluir
+                              <Trash2 />
                             </Button>
                           </div>
                         </TableCell>
@@ -309,8 +312,8 @@ export function AssetManager({
           if (!next) resetDialog();
         }}
       >
-        <DialogContent>
-          <DialogHeader>
+        <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="px-6 pt-6">
             <DialogTitle>
               {editing ? "Editar ativo" : "Cadastrar ativo"}
             </DialogTitle>
@@ -318,6 +321,7 @@ export function AssetManager({
               Registre a identificação estável e o estado atual do equipamento.
             </DialogDescription>
           </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 [scrollbar-width:thin]">
           <FieldGroup>
             <div className="grid gap-4 sm:grid-cols-2">
               <Field>
@@ -411,7 +415,8 @@ export function AssetManager({
               />
             </Field>
           </FieldGroup>
-          <DialogFooter>
+          </div>
+          <DialogFooter className="border-t px-6 py-4">
             <DialogClose
               render={<Button variant="outline" disabled={pending} />}
             >

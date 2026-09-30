@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/card";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
+import { withTicketVisibility } from "@/lib/auth/ticket-access";
 import {
   parseTicketFilters,
   ticketSearchWhere,
@@ -25,7 +26,7 @@ export default async function TicketsPage({
   const session = await requirePermission("tickets:view");
   const params = await searchParams;
   const filters = parseTicketFilters(params);
-  const where = ticketSearchWhere(filters);
+  const where = withTicketVisibility(ticketSearchWhere(filters), session);
   const [tickets, total, users] = await Promise.all([
     prisma.ticket.findMany({
       where,

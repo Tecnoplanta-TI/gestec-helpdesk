@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/session";
 import { auditSnapshot } from "@/lib/domain/audit";
 import { getProject } from "@/lib/domain/projects";
 import { findProjectHourlyRateCents } from "@/lib/domain/project-rates";
+import { optionalCorrectionReasonSchema } from "@/lib/domain/schemas";
 import { ApiError, errorResponse, readJson } from "@/lib/http/api-error";
 import { prisma } from "@/lib/prisma";
 
@@ -19,7 +20,7 @@ const updateSchema = z
     billable: z.boolean().optional(),
     startedAt: z.coerce.date().optional(),
     endedAt: z.coerce.date().optional(),
-    correctionReason: z.string().trim().min(3).max(1000),
+    correctionReason: optionalCorrectionReasonSchema,
     version: z.number().int().positive(),
   })
   .refine(
@@ -105,7 +106,9 @@ export async function PATCH(
           endedAt,
           durationSeconds,
           hourlyRateCentsSnapshot,
-          correctionReason: input.correctionReason,
+          ...(input.correctionReason
+            ? { correctionReason: input.correctionReason }
+            : {}),
           ...(project
             ? {
                 costCenterId:

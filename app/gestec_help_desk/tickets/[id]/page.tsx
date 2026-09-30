@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { TicketWorkspace } from "@/components/tickets/ticket-workspace";
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
+import { withTicketVisibility } from "@/lib/auth/ticket-access";
 import { listAssignableUsers } from "@/lib/domain/users";
 import { ticketInclude } from "@/lib/domain/tickets";
 import { prisma } from "@/lib/prisma";
@@ -17,7 +18,10 @@ export default async function TicketPage({
   const session = await requirePermission("tickets:view");
   const { id } = await params;
   const [ticket, costCenters, users, assets, services, serviceGroups] = await Promise.all([
-    prisma.ticket.findUnique({ where: { id }, include: ticketInclude }),
+    prisma.ticket.findFirst({
+      where: withTicketVisibility({ id }, session),
+      include: ticketInclude,
+    }),
     prisma.costCenter.findMany({
       where: { active: true },
       orderBy: { name: "asc" },

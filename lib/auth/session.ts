@@ -8,6 +8,7 @@ import { UserRole } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/http/api-error";
 import { hasPermission, type Permission } from "@/lib/auth/permissions";
+import { resolveSupabaseRole } from "@/lib/auth/supabase-role";
 
 export interface GestecSession {
   userId: string;
@@ -186,27 +187,46 @@ export const getGestecSession = cache(
           : typeof metadata.name === "string"
             ? metadata.name
             : email.split("@")[0];
+      const normalizedEmail = email.trim().toLowerCase();
       const current = await prisma.userRef.findFirst({
-        where: { OR: [{ authUserId: subject }, { email }] },
-        select: { role: true },
+        where: {
+          OR: [{ authUserId: subject }, { email: normalizedEmail }],
+        },
+        select: { role: true, active: true },
       });
-      const isAdministrator = configuredSupabaseAdministrators().has(
-        email.toLowerCase(),
-      );
+      if (!current) {
+        throw new ApiError(
+          403,
+          "USER_NOT_PROVISIONED",
+          "Seu acesso ainda não foi liberado no Help Desk. Peça a um administrador para cadastrar seu usuário.",
+        );
+      }
+      if (!current.active) {
+        throw new ApiError(
+          403,
+          "USER_INACTIVE",
+          "Seu acesso ao Gestec Help Desk está inativo.",
+        );
+      }
+      const role = resolveSupabaseRole({
+        email: normalizedEmail,
+        persistedRole: current.role,
+        initialAdministrators: configuredSupabaseAdministrators(),
+      });
+      if (!role) {
+        throw new ApiError(
+          403,
+          "USER_NOT_PROVISIONED",
+          "Seu acesso ainda não foi liberado no Help Desk. Peça a um administrador para cadastrar seu usuário.",
+        );
+      }
       return resolveLocalSession({
         sourceUserId: subject,
         authUserId: subject,
         externalId: `supabase:${subject}`,
         name: displayName,
-        email: email.toLowerCase(),
-        // Only the e-mails explicitly allowed by the production environment
-        // can receive ADMIN. This also removes a stale ADMIN role at the next
-        // login when an address is removed from the allowlist.
-        role: isAdministrator
-          ? UserRole.ADMIN
-          : current?.role === UserRole.ADMIN
-            ? UserRole.TECHNICIAN
-            : (current?.role ?? UserRole.TECHNICIAN),
+        email: normalizedEmail,
+        role,
       });
     }
 

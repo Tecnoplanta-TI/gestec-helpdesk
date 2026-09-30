@@ -5,25 +5,48 @@ import { useRouter } from "next/navigation";
 import { TimeEntrySource, TimeEntryStatus } from "@/lib/client-enums";
 import { toast } from "sonner";
 
+import { DateField, DateTimeField } from "@/components/date-field";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Field,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  ProjectCombobox,
+  type TimeProject,
+} from "@/components/time/project-combobox";
+import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Switch } from "@/components/ui/switch";
 import {
   Table,
@@ -33,9 +56,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
-import { Add01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { Pencil, Trash2 } from "lucide-react";
+import { Add01Icon, MoreVerticalIcon } from "@/lib/icons";
+import { HugeiconsIcon } from "@/components/icon";
 import {
   formatDateTime,
   formatHoursMinutes,
@@ -65,6 +88,61 @@ export type AdminTimeEntry = {
   projectNameSnapshot: string | null;
 };
 
+type BulkFields = {
+  description: boolean;
+  user: boolean;
+  project: boolean;
+  billable: boolean;
+  time: boolean;
+  date: boolean;
+};
+
+type BulkTargetEntry = {
+  id: string;
+  version: number;
+  startedAt?: string;
+  endedAt?: string;
+};
+
+function localDateInputValue(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function localTimeInputValue(value: Date) {
+  const hours = String(value.getHours()).padStart(2, "0");
+  const minutes = String(value.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+}
+
+function localDateTimeIso(dateValue: string, timeValue: string) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const [hours, minutes] = timeValue.split(":").map(Number);
+  return new Date(year, month - 1, day, hours, minutes).toISOString();
+}
+
+function addDaysToDateInput(dateValue: string, days: number) {
+  const [year, month, day] = dateValue.split("-").map(Number);
+  const next = new Date(year, month - 1, day + days);
+  return localDateInputValue(next);
+}
+
+function localDayOffset(startedAt: Date, endedAt: Date) {
+  const startDay = Date.UTC(
+    startedAt.getFullYear(),
+    startedAt.getMonth(),
+    startedAt.getDate(),
+  );
+  const endDay = Date.UTC(
+    endedAt.getFullYear(),
+    endedAt.getMonth(),
+    endedAt.getDate(),
+  );
+  return Math.round((endDay - startDay) / 86_400_000);
+}
+
 export function AdminTimeEntryManager({
   entries,
   users,
@@ -73,7 +151,7 @@ export function AdminTimeEntryManager({
 }: {
   entries: AdminTimeEntry[];
   users: Array<{ id: string; name: string }>;
-  projects: Array<{ id: string; name: string }>;
+  projects: TimeProject[];
   currentUserId: string;
 }) {
   const router = useRouter();
@@ -81,6 +159,28 @@ export function AdminTimeEntryManager({
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<AdminTimeEntry | null>(null);
   const [reason, setReason] = useState("");
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkReason, setBulkReason] = useState("");
+  const [bulkDescription, setBulkDescription] = useState("");
+  const [bulkFields, setBulkFields] = useState<BulkFields>({
+    description: false,
+    user: false,
+    project: false,
+    billable: false,
+    time: false,
+    date: false,
+  });
+  const [bulkUserId, setBulkUserId] = useState("");
+  const [bulkProjectId, setBulkProjectId] = useState("");
+  const [bulkBillable, setBulkBillable] = useState(false);
+  const [bulkDate, setBulkDate] = useState("");
+  const [bulkStartedTime, setBulkStartedTime] = useState("");
+  const [bulkEndedTime, setBulkEndedTime] = useState("");
+  const [deleteEntries, setDeleteEntries] = useState<AdminTimeEntry[] | null>(
+    null,
+  );
+  const [deleteReason, setDeleteReason] = useState("");
   const [form, setForm] = useState<{
     userId: string;
     description: string;
@@ -139,9 +239,174 @@ export function AdminTimeEntryManager({
     });
   }
 
+  function duplicate(entry: AdminTimeEntry) {
+    startTransition(async () => {
+      try {
+        await apiRequest(
+          `/api/v1/gestec-help-desk/admin/time-entries/${entry.id}/duplicate`,
+          {
+            method: "POST",
+            body: JSON.stringify({ version: entry.version }),
+          },
+        );
+        toast.success("Apontamento duplicado com os mesmos dados.");
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível duplicar o apontamento.",
+        );
+      }
+    });
+  }
+
   function closeSheet() {
     setEditing(null);
     setCreating(false);
+  }
+
+  const selectedEntries = entries.filter((entry) => selectedIds.has(entry.id));
+  const selectableEntries = entries.filter(
+    (entry) => entry.status !== TimeEntryStatus.VOIDED,
+  );
+  const allSelectableSelected =
+    selectableEntries.length > 0 &&
+    selectableEntries.every((entry) => selectedIds.has(entry.id));
+  const someSelectableSelected = selectableEntries.some((entry) =>
+    selectedIds.has(entry.id),
+  );
+
+  function toggleEntry(entryId: string, checked: boolean | "indeterminate") {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (checked) next.add(entryId);
+      else next.delete(entryId);
+      return next;
+    });
+  }
+
+  function resetBulkForm() {
+    setBulkFields({
+      description: false,
+      user: false,
+      project: false,
+      billable: false,
+      time: false,
+      date: false,
+    });
+    setBulkReason("");
+    setBulkDescription("");
+    setBulkUserId("");
+    setBulkProjectId("");
+    setBulkBillable(false);
+    setBulkDate("");
+    setBulkStartedTime("");
+    setBulkEndedTime("");
+  }
+
+  function openBulkEditor() {
+    resetBulkForm();
+    const first = selectedEntries[0];
+    if (first) {
+      setBulkDate(localDateInputValue(new Date(first.startedAt)));
+      setBulkStartedTime(localTimeInputValue(new Date(first.startedAt)));
+      setBulkEndedTime(localTimeInputValue(new Date(first.endedAt)));
+    }
+    setBulkOpen(true);
+  }
+
+  function saveBulkEdit() {
+    const body: {
+      entries: BulkTargetEntry[];
+      correctionReason?: string;
+      description?: string;
+      userId?: string;
+      projectId?: string;
+      billable?: boolean;
+    } = {
+      entries: selectedEntries.map((entry) => {
+        const target: BulkTargetEntry = {
+          id: entry.id,
+          version: entry.version,
+        };
+        if (bulkFields.date || bulkFields.time) {
+          const start = new Date(entry.startedAt);
+          const end = new Date(entry.endedAt);
+          const existingStartDate = localDateInputValue(start);
+          const existingEndDate = localDateInputValue(end);
+          const startDate = bulkFields.date ? bulkDate : existingStartDate;
+          const endDate = bulkFields.date
+            ? addDaysToDateInput(startDate, localDayOffset(start, end))
+            : existingEndDate;
+          target.startedAt = localDateTimeIso(
+            startDate,
+            bulkFields.time ? bulkStartedTime : localTimeInputValue(start),
+          );
+          target.endedAt = localDateTimeIso(
+            endDate,
+            bulkFields.time ? bulkEndedTime : localTimeInputValue(end),
+          );
+        }
+        return target;
+      }),
+      correctionReason: bulkReason.trim() || undefined,
+    };
+    if (bulkFields.description) body.description = bulkDescription.trim();
+    if (bulkFields.user) body.userId = bulkUserId;
+    if (bulkFields.project) body.projectId = bulkProjectId;
+    if (bulkFields.billable) body.billable = bulkBillable;
+    startTransition(async () => {
+      try {
+        const result = await apiRequest<{ updated: number }>(
+          "/api/v1/gestec-help-desk/admin/time-entries/bulk",
+          { method: "PATCH", body: JSON.stringify(body) },
+        );
+        toast.success(`${result.updated} apontamento(s) atualizado(s).`);
+        setBulkOpen(false);
+        setSelectedIds(new Set());
+        resetBulkForm();
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível editar os apontamentos.",
+        );
+      }
+    });
+  }
+
+  function confirmDelete() {
+    if (!deleteEntries?.length) return;
+    startTransition(async () => {
+      try {
+        const result = await apiRequest<{ voided: number }>(
+          "/api/v1/gestec-help-desk/admin/time-entries/bulk",
+          {
+            method: "DELETE",
+            body: JSON.stringify({
+              entries: deleteEntries.map(({ id, version }) => ({
+                id,
+                version,
+              })),
+              correctionReason: deleteReason.trim(),
+            }),
+          },
+        );
+        toast.success(`${result.voided} apontamento(s) excluído(s).`);
+        setDeleteEntries(null);
+        setDeleteReason("");
+        setSelectedIds(new Set());
+        router.refresh();
+      } catch (error) {
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível excluir os apontamentos.",
+        );
+      }
+    });
   }
 
   function save() {
@@ -178,7 +443,9 @@ export function AdminTimeEntryManager({
                 endedAt: new Date(form.endedAt).toISOString(),
                 status: form.status,
                 source: form.source,
-                correctionReason: reason,
+                ...(reason.trim()
+                  ? { correctionReason: reason.trim() }
+                  : {}),
                 version: editing.version,
               }),
             },
@@ -197,8 +464,41 @@ export function AdminTimeEntryManager({
 
   return (
     <>
-      <div className="flex justify-end">
-        <Button onClick={openCreate} disabled={projects.length === 0}>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedEntries.length ? (
+            <>
+              <span className="text-sm text-muted-foreground">
+                {selectedEntries.length} selecionado(s)
+              </span>
+              <Button
+                variant="outline"
+                onClick={openBulkEditor}
+                disabled={pending}
+              >
+                Editar em massa
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => {
+                  setDeleteReason("");
+                  setDeleteEntries(selectedEntries);
+                }}
+                disabled={pending}
+              >
+                Excluir
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => setSelectedIds(new Set())}
+                disabled={pending}
+              >
+                Limpar seleção
+              </Button>
+            </>
+          ) : null}
+        </div>
+        <Button onClick={() => openCreate()} disabled={projects.length === 0}>
           <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
           Novo apontamento
         </Button>
@@ -207,6 +507,23 @@ export function AdminTimeEntryManager({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                <Checkbox
+                  aria-label="Selecionar todos os apontamentos válidos"
+                  disabled={selectableEntries.length === 0}
+                  checked={allSelectableSelected}
+                  indeterminate={
+                    !allSelectableSelected && someSelectableSelected
+                  }
+                  onCheckedChange={(checked) => {
+                    setSelectedIds(
+                      checked
+                        ? new Set(selectableEntries.map((entry) => entry.id))
+                        : new Set(),
+                    );
+                  }}
+                />
+              </TableHead>
               <TableHead>Quando</TableHead>
               <TableHead>Pessoa</TableHead>
               <TableHead>Descrição</TableHead>
@@ -220,7 +537,7 @@ export function AdminTimeEntryManager({
             {entries.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="h-28 text-center text-muted-foreground"
                 >
                   Nenhum apontamento no período.
@@ -229,6 +546,16 @@ export function AdminTimeEntryManager({
             ) : (
               entries.map((entry) => (
                 <TableRow key={entry.id}>
+                  <TableCell>
+                    <Checkbox
+                      aria-label={`Selecionar apontamento de ${entry.user.name}, ${formatDateTime(entry.startedAt)}`}
+                      checked={selectedIds.has(entry.id)}
+                      disabled={entry.status === TimeEntryStatus.VOIDED}
+                      onCheckedChange={(checked) =>
+                        toggleEntry(entry.id, checked === true)
+                      }
+                    />
+                  </TableCell>
                   <TableCell className="tabular-nums">
                     {formatDateTime(entry.startedAt)}
                   </TableCell>
@@ -257,13 +584,69 @@ export function AdminTimeEntryManager({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => open(entry)}
-                    >
-                      Editar
-                    </Button>
+                    <div className="inline-flex items-center justify-end gap-1">
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Editar apontamento de ${entry.user.name}`}
+                              onClick={() => open(entry)}
+                            />
+                          }
+                        >
+                          <Pencil />
+                        </TooltipTrigger>
+                        <TooltipContent>Editar</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              aria-label={`Excluir apontamento de ${entry.user.name}`}
+                              disabled={entry.status === TimeEntryStatus.VOIDED}
+                              onClick={() => {
+                                setDeleteReason("");
+                                setDeleteEntries([entry]);
+                              }}
+                            />
+                          }
+                        >
+                          <Trash2 />
+                        </TooltipTrigger>
+                        <TooltipContent>Excluir</TooltipContent>
+                      </Tooltip>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger
+                          render={
+                            <Button
+                              variant="ghost"
+                              size="icon-xs"
+                              aria-label={`Mais ações do apontamento ${entry.description || entry.id}`}
+                            />
+                          }
+                        >
+                          <HugeiconsIcon icon={MoreVerticalIcon} />
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent
+                          align="end"
+                          className="w-36 min-w-36 rounded-xl p-1"
+                        >
+                          <DropdownMenuGroup>
+                            <DropdownMenuItem
+                              className="rounded-lg"
+                              disabled={pending}
+                              onClick={() => duplicate(entry)}
+                            >
+                              Duplicar
+                            </DropdownMenuItem>
+                          </DropdownMenuGroup>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))
@@ -272,24 +655,338 @@ export function AdminTimeEntryManager({
         </Table>
       </div>
 
-      <Sheet
-        open={creating || Boolean(editing)}
-        onOpenChange={(openSheet) => {
-          if (!openSheet) closeSheet();
+      <Dialog
+        open={bulkOpen}
+        onOpenChange={(openDialog) => {
+          setBulkOpen(openDialog);
+          if (!openDialog) resetBulkForm();
         }}
       >
-        <SheetContent className="overflow-y-auto">
-          <SheetHeader>
-            <SheetTitle>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Editar apontamentos em massa</DialogTitle>
+            <DialogDescription>
+              Marque os campos que deseja aplicar aos {selectedEntries.length}{" "}
+              apontamento(s) selecionado(s).
+            </DialogDescription>
+          </DialogHeader>
+          <FieldSet className="gap-0">
+            <FieldLegend className="sr-only">
+              Campos da edição em massa
+            </FieldLegend>
+            <FieldGroup className="gap-0">
+              <Field
+                className="grid grid-cols-[auto_6.5rem_minmax(0,1fr)] items-center gap-3 border-b py-3"
+                orientation="horizontal"
+              >
+                <Checkbox
+                  id="bulk-description-enabled"
+                  checked={bulkFields.description}
+                  onCheckedChange={(checked) =>
+                    setBulkFields((value) => ({
+                      ...value,
+                      description: checked === true,
+                    }))
+                  }
+                />
+                <FieldLabel
+                  htmlFor="bulk-description-enabled"
+                  className="font-medium"
+                >
+                  Descrição
+                </FieldLabel>
+                <Input
+                  value={bulkDescription}
+                  onChange={(event) => setBulkDescription(event.target.value)}
+                  placeholder="Adicionar descrição…"
+                  maxLength={500}
+                  disabled={!bulkFields.description}
+                />
+              </Field>
+              <Field
+                className="grid grid-cols-[auto_6.5rem_minmax(0,1fr)] items-center gap-3 border-b py-3"
+                orientation="horizontal"
+              >
+                <Checkbox
+                  id="bulk-user-enabled"
+                  checked={bulkFields.user}
+                  onCheckedChange={(checked) =>
+                    setBulkFields((value) => ({
+                      ...value,
+                      user: checked === true,
+                    }))
+                  }
+                />
+                <FieldLabel htmlFor="bulk-user-enabled" className="font-medium">
+                  Pessoa
+                </FieldLabel>
+                <Select
+                  value={bulkUserId}
+                  onValueChange={(value) => setBulkUserId(value ?? "")}
+                  disabled={!bulkFields.user}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {(value) =>
+                        users.find((user) => user.id === value)?.name ??
+                        "Selecionar pessoa"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {users.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                className="grid grid-cols-[auto_6.5rem_minmax(0,1fr)] items-center gap-3 border-b py-3"
+                orientation="horizontal"
+              >
+                <Checkbox
+                  id="bulk-project-enabled"
+                  checked={bulkFields.project}
+                  onCheckedChange={(checked) =>
+                    setBulkFields((value) => ({
+                      ...value,
+                      project: checked === true,
+                    }))
+                  }
+                />
+                <FieldLabel
+                  htmlFor="bulk-project-enabled"
+                  className="font-medium"
+                >
+                  Projeto
+                </FieldLabel>
+                <Select
+                  value={bulkProjectId}
+                  onValueChange={(value) => setBulkProjectId(value ?? "")}
+                  disabled={!bulkFields.project || projects.length === 0}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue>
+                      {(value) =>
+                        projects.find((project) => project.id === value)
+                          ?.name ?? "Selecionar projeto"
+                      }
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field
+                className="grid grid-cols-[auto_6.5rem_minmax(0,1fr)] items-center gap-3 border-b py-3"
+                orientation="horizontal"
+              >
+                <Checkbox
+                  id="bulk-billable-enabled"
+                  checked={bulkFields.billable}
+                  onCheckedChange={(checked) =>
+                    setBulkFields((value) => ({
+                      ...value,
+                      billable: checked === true,
+                    }))
+                  }
+                />
+                <FieldLabel
+                  htmlFor="bulk-billable-enabled"
+                  className="font-medium"
+                >
+                  Faturável
+                </FieldLabel>
+                <div className="flex items-center gap-3">
+                  <Switch
+                    checked={bulkBillable}
+                    onCheckedChange={(checked) =>
+                      setBulkBillable(Boolean(checked))
+                    }
+                    disabled={!bulkFields.billable}
+                  />
+                  <span className="text-sm text-muted-foreground">
+                    {bulkBillable ? "Sim" : "Não"}
+                  </span>
+                </div>
+              </Field>
+              <Field
+                className="grid grid-cols-[auto_6.5rem_minmax(0,1fr)] items-center gap-3 border-b py-3"
+                orientation="horizontal"
+              >
+                <Checkbox
+                  id="bulk-time-enabled"
+                  checked={bulkFields.time}
+                  onCheckedChange={(checked) =>
+                    setBulkFields((value) => ({
+                      ...value,
+                      time: checked === true,
+                    }))
+                  }
+                />
+                <FieldLabel htmlFor="bulk-time-enabled" className="font-medium">
+                  Horário
+                </FieldLabel>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    aria-label="Horário de início"
+                    type="time"
+                    value={bulkStartedTime}
+                    onChange={(event) => setBulkStartedTime(event.target.value)}
+                    disabled={!bulkFields.time}
+                  />
+                  <Input
+                    aria-label="Horário de término"
+                    type="time"
+                    value={bulkEndedTime}
+                    onChange={(event) => setBulkEndedTime(event.target.value)}
+                    disabled={!bulkFields.time}
+                  />
+                </div>
+              </Field>
+              <Field
+                className="grid grid-cols-[auto_6.5rem_minmax(0,1fr)] items-center gap-3 border-b py-3"
+                orientation="horizontal"
+              >
+                <Checkbox
+                  id="bulk-date-enabled"
+                  checked={bulkFields.date}
+                  onCheckedChange={(checked) =>
+                    setBulkFields((value) => ({
+                      ...value,
+                      date: checked === true,
+                    }))
+                  }
+                />
+                <FieldLabel htmlFor="bulk-date-enabled" className="font-medium">
+                  Data
+                </FieldLabel>
+                <DateField
+                  value={bulkDate}
+                  onChange={setBulkDate}
+                  disabled={!bulkFields.date}
+                />
+              </Field>
+            </FieldGroup>
+          </FieldSet>
+          <Field>
+            <FieldLabel htmlFor="bulk-time-reason">
+              Motivo da alteração
+            </FieldLabel>
+            <Textarea
+              id="bulk-time-reason"
+              value={bulkReason}
+              onChange={(event) => setBulkReason(event.target.value)}
+              maxLength={1000}
+              placeholder="Opcional"
+            />
+          </Field>
+          <DialogFooter>
+            <DialogClose
+              render={<Button variant="outline" disabled={pending} />}
+            >
+              Cancelar
+            </DialogClose>
+            <Button
+              onClick={saveBulkEdit}
+              disabled={
+                pending ||
+                bulkReason.trim().length === 1 ||
+                bulkReason.trim().length === 2 ||
+                selectedEntries.length === 0 ||
+                !Object.values(bulkFields).some(Boolean) ||
+                (bulkFields.description && !bulkDescription.trim()) ||
+                (bulkFields.user && !bulkUserId) ||
+                (bulkFields.project && !bulkProjectId) ||
+                (bulkFields.date && !bulkDate) ||
+                (bulkFields.time && (!bulkStartedTime || !bulkEndedTime))
+              }
+            >
+              {pending ? "Salvando…" : "Aplicar alterações"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(deleteEntries)}
+        onOpenChange={(openDialog) => {
+          if (!openDialog) {
+            setDeleteEntries(null);
+            setDeleteReason("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              Excluir{" "}
+              {deleteEntries?.length === 1 ? "apontamento" : "apontamentos"}?
+            </DialogTitle>
+            <DialogDescription>
+              Os registros serão invalidados e permanecerão no histórico de
+              auditoria. Informe o motivo para continuar.
+            </DialogDescription>
+          </DialogHeader>
+          <Field>
+            <FieldLabel htmlFor="delete-time-reason">
+              Motivo da exclusão
+            </FieldLabel>
+            <Textarea
+              id="delete-time-reason"
+              value={deleteReason}
+              onChange={(event) => setDeleteReason(event.target.value)}
+              minLength={3}
+              maxLength={1000}
+            />
+          </Field>
+          <DialogFooter>
+            <DialogClose
+              render={<Button variant="outline" disabled={pending} />}
+            >
+              Cancelar
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={confirmDelete}
+              disabled={pending || deleteReason.trim().length < 3}
+            >
+              {pending ? "Excluindo…" : "Confirmar exclusão"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={creating || Boolean(editing)}
+        onOpenChange={(openDialog) => {
+          if (!openDialog) closeSheet();
+        }}
+      >
+        <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col gap-4 overflow-hidden sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>
               {creating ? "Novo apontamento" : "Corrigir apontamento"}
-            </SheetTitle>
-            <SheetDescription>
+            </DialogTitle>
+            <DialogDescription>
               {creating
                 ? "Lance horas de qualquer pessoa em qualquer projeto."
-                : "A duração é recalculada pelas datas. Informe o motivo."}
-            </SheetDescription>
-          </SheetHeader>
-          <FieldGroup className="px-4">
+                : "A duração é recalculada pelas datas. O motivo é opcional."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto pe-1 [scrollbar-width:thin]">
+          <FieldGroup>
             <Field>
               <FieldLabel>Pessoa</FieldLabel>
               <Select
@@ -334,31 +1031,21 @@ export function AdminTimeEntryManager({
             </Field>
             <Field>
               <FieldLabel>Centro de custo ou projeto</FieldLabel>
-              <Select
+              <ProjectCombobox
+                projects={projects}
+                recentProjectIds={[]}
                 value={form.projectId}
-                onValueChange={(value) =>
+                onChange={(projectId) => {
+                  const project = projects.find(
+                    (item) => item.id === projectId,
+                  );
                   setForm((current) => ({
                     ...current,
-                    projectId: value ?? current.projectId,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue>
-                    {(value) =>
-                      projects.find((project) => project.id === value)?.name ??
-                      "Projeto"
-                    }
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {projects.map((project) => (
-                    <SelectItem key={project.id} value={project.id}>
-                      {project.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    projectId,
+                    billable: project?.billableByDefault ?? current.billable,
+                  }));
+                }}
+              />
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-time-ticket">Ticket (UUID)</FieldLabel>
@@ -376,28 +1063,26 @@ export function AdminTimeEntryManager({
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-time-start">Início</FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-time-start"
-                type="datetime-local"
                 value={form.startedAt}
-                onChange={(event) =>
+                onChange={(startedAt) =>
                   setForm((current) => ({
                     ...current,
-                    startedAt: event.target.value,
+                    startedAt,
                   }))
                 }
               />
             </Field>
             <Field>
               <FieldLabel htmlFor="admin-time-end">Fim</FieldLabel>
-              <Input
+              <DateTimeField
                 id="admin-time-end"
-                type="datetime-local"
                 value={form.endedAt}
-                onChange={(event) =>
+                onChange={(endedAt) =>
                   setForm((current) => ({
                     ...current,
-                    endedAt: event.target.value,
+                    endedAt,
                   }))
                 }
               />
@@ -475,25 +1160,29 @@ export function AdminTimeEntryManager({
                   id="admin-time-reason"
                   value={reason}
                   onChange={(event) => setReason(event.target.value)}
+                  placeholder="Opcional"
                 />
               </Field>
             )}
           </FieldGroup>
-          <SheetFooter>
+          </div>
+          <DialogFooter>
             <Button
               disabled={
                 pending ||
                 !form.description.trim() ||
                 !form.projectId ||
-                (!creating && reason.trim().length < 3)
+                (!creating &&
+                  reason.trim().length > 0 &&
+                  reason.trim().length < 3)
               }
               onClick={save}
             >
               {pending ? "Salvando…" : creating ? "Criar" : "Salvar"}
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

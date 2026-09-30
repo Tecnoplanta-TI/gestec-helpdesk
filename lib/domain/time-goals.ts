@@ -4,11 +4,40 @@ export function daysInMonth(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
 }
 
+export function weekdaysInMonth(date = new Date()) {
+  let weekdays = 0;
+  for (let day = 1; day <= daysInMonth(date); day += 1) {
+    const weekday = new Date(date.getFullYear(), date.getMonth(), day).getDay();
+    if (weekday !== 0 && weekday !== 6) weekdays += 1;
+  }
+  return weekdays;
+}
+
 export function monthlyGoalSeconds(
   dailyGoalSeconds = DAILY_GOAL_SECONDS,
   month = new Date(),
 ) {
-  return daysInMonth(month) * dailyGoalSeconds;
+  return weekdaysInMonth(month) * dailyGoalSeconds;
+}
+
+export function elapsedDaysInMonth(date = new Date()) {
+  return Math.min(date.getDate(), daysInMonth(date));
+}
+
+export function elapsedWeekdaysInMonth(date = new Date()) {
+  let weekdays = 0;
+  for (let day = 1; day <= elapsedDaysInMonth(date); day += 1) {
+    const weekday = new Date(date.getFullYear(), date.getMonth(), day).getDay();
+    if (weekday !== 0 && weekday !== 6) weekdays += 1;
+  }
+  return weekdays;
+}
+
+export function elapsedMonthlyGoalSeconds(
+  dailyGoalSeconds = DAILY_GOAL_SECONDS,
+  date = new Date(),
+) {
+  return elapsedWeekdaysInMonth(date) * dailyGoalSeconds;
 }
 
 export function goalProgressPercent(seconds: number, goalSeconds: number) {
@@ -29,7 +58,10 @@ export function selectEffectiveDailyGoalSeconds(
   const result = new Map(userIds.map((userId) => [userId, fallbackSeconds]));
   const usersWithGoal = new Set<string>();
   for (const goal of goals) {
-    if (result.has(goal.targetUserId) && !usersWithGoal.has(goal.targetUserId)) {
+    if (
+      result.has(goal.targetUserId) &&
+      !usersWithGoal.has(goal.targetUserId)
+    ) {
       result.set(goal.targetUserId, goal.targetSeconds);
       usersWithGoal.add(goal.targetUserId);
     }

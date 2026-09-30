@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { DateField } from "@/components/date-field";
 import {
   Field,
   FieldDescription,
@@ -40,13 +41,23 @@ import {
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
 import { CreateProjectDialog } from "@/components/time/create-project-dialog";
 import { Add01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
+import { Pencil, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/http/client";
 import {
   currentLocalDateValue,
   formatCurrencyFromCents,
   formatHoursMinutes,
 } from "@/lib/format";
+import { formatRateioSummary } from "@/lib/format";
+import {
+  isRateioDraftValid,
+  ProjectRateioFields,
+  rateioPayload,
+  sharesFromRateio,
+  type RateioShareDraft,
+  type RateioShareValue,
+} from "@/components/time/project-rateio-fields";
 
 export type AdminProjectItem = {
   id: string;
@@ -61,6 +72,7 @@ export type AdminProjectItem = {
   hourlyRateEffectiveFrom: string | Date | null;
   latestHourlyRateEffectiveFrom: string | Date | null;
   monthSeconds: number;
+  rateio: RateioShareValue[];
 };
 
 function nextHourlyRateEffectiveFrom(value: string | Date | null) {
@@ -88,7 +100,6 @@ export function AdminProjectManager({
   const [deleting, setDeleting] = useState<AdminProjectItem | null>(null);
   const [form, setForm] = useState({
     name: "",
-    code: "",
     color: "#10b981",
     availableToAll: true,
     billableByDefault: false,
@@ -96,12 +107,12 @@ export function AdminProjectManager({
     hourlyRate: "",
     hourlyRateEffectiveFrom: currentLocalDateValue(),
   });
+  const [rateio, setRateio] = useState<RateioShareDraft[]>([]);
 
   function openEditor(project: AdminProjectItem) {
     setEditing(project);
     setForm({
       name: project.name,
-      code: project.code ?? "",
       color: project.color ?? "#10b981",
       availableToAll: project.availableToAll,
       billableByDefault: project.billableByDefault,
@@ -111,6 +122,7 @@ export function AdminProjectManager({
         project.latestHourlyRateEffectiveFrom,
       ),
     });
+    setRateio(sharesFromRateio(project.rateio));
   }
 
   function save() {
@@ -121,12 +133,12 @@ export function AdminProjectManager({
         await apiRequest(`/api/v1/gestec-help-desk/projects/${id}`, {
           method: "PATCH",
           body: JSON.stringify({
-            code: form.code.trim().toUpperCase(),
             name: form.name.trim(),
             color: form.color,
             availableToAll: form.availableToAll,
             billableByDefault: form.billableByDefault,
             active: form.active,
+            allocations: rateioPayload(rateio),
             ...(form.hourlyRate.trim()
               ? {
                   hourlyRate: Number(form.hourlyRate.replace(",", ".")),
@@ -169,12 +181,10 @@ export function AdminProjectManager({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Projetos Semear
-          </h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Projetos</h1>
           <p className="text-sm text-muted-foreground">
-            Projetos do programa Semear. Clientes são administrados em seu
-            próprio cadastro.
+            Cadastro de projetos. Clientes são administrados em seu próprio
+            cadastro.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -189,7 +199,7 @@ export function AdminProjectManager({
           <EmptyHeader>
             <EmptyTitle>Nenhum projeto cadastrado</EmptyTitle>
             <EmptyDescription>
-              Crie um projeto Semear para começar.
+              Crie um projeto para começar.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
@@ -219,6 +229,11 @@ export function AdminProjectManager({
                       ) : null}
                       {project.name}
                     </span>
+                    {project.rateio?.length ? (
+                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                        Rateio: {formatRateioSummary(project.rateio)}
+                      </span>
+                    ) : null}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {project.code ?? "—"}
@@ -237,20 +252,22 @@ export function AdminProjectManager({
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-1">
                       <Button
-                        variant="outline"
-                        size="sm"
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Editar"
                         onClick={() => openEditor(project)}
                       >
-                        Editar
+                        <Pencil />
                       </Button>
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        aria-label="Excluir"
                         onClick={() => setDeleting(project)}
                       >
-                        Excluir
+                        <Trash2 />
                       </Button>
                     </div>
                   </TableCell>
@@ -267,29 +284,22 @@ export function AdminProjectManager({
           if (!open) setEditing(null);
         }}
       >
-        <SheetContent side="right" className="sm:max-w-md">
+        <SheetContent side="right" className="sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Editar projeto</SheetTitle>
             <SheetDescription>
-              Altere o código, nome, valor-hora, vigência, visibilidade e
-              faturabilidade padrão do projeto Semear.
+              Altere o nome, valor-hora, vigência, visibilidade, faturabilidade
+              padrão e o rateio por centro de custo do projeto.
             </SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-6">
+          <div className="flex-1 overflow-y-auto px-6 [scrollbar-width:thin]">
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="admin-project-code">Código</FieldLabel>
-                <Input
-                  id="admin-project-code"
-                  value={form.code}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      code: event.target.value.toUpperCase(),
-                    }))
-                  }
-                  placeholder="PRO-0001"
-                />
+                <FieldLabel>Código</FieldLabel>
+                <p className="text-sm font-medium">{editing?.code ?? "—"}</p>
+                <FieldDescription>
+                  O código do projeto é gerado automaticamente.
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="admin-project-name">Nome</FieldLabel>
@@ -332,17 +342,16 @@ export function AdminProjectManager({
                   <FieldLabel htmlFor="admin-project-rate-effective-from">
                     Válido a partir de
                   </FieldLabel>
-                  <Input
+                  <DateField
                     id="admin-project-rate-effective-from"
-                    type="date"
                     value={form.hourlyRateEffectiveFrom}
                     min={nextHourlyRateEffectiveFrom(
                       editing?.latestHourlyRateEffectiveFrom ?? null,
                     )}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        hourlyRateEffectiveFrom: event.target.value,
+                        hourlyRateEffectiveFrom: value,
                       }))
                     }
                   />
@@ -412,6 +421,7 @@ export function AdminProjectManager({
                   }
                 />
               </Field>
+              <ProjectRateioFields shares={rateio} onChange={setRateio} />
             </FieldGroup>
           </div>
           <SheetFooter>
@@ -427,7 +437,7 @@ export function AdminProjectManager({
               disabled={
                 pending ||
                 form.name.trim().length < 2 ||
-                !/^PRO-\d+$/i.test(form.code) ||
+                !isRateioDraftValid(rateio) ||
                 (form.hourlyRate.trim().length > 0 &&
                   (!Number.isFinite(
                     Number(form.hourlyRate.replace(",", ".")),

@@ -10,7 +10,7 @@ import {
 
 import { cn } from "@/lib/utils";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { ArrowLeftIcon, ArrowRightIcon, ArrowDownIcon } from "@/lib/icons";
 
 function Calendar({

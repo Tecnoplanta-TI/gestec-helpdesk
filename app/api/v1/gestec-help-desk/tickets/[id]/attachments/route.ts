@@ -1,4 +1,5 @@
 import { requirePermission } from "@/lib/auth/session";
+import { assertTicketVisible } from "@/lib/auth/ticket-access";
 import { saveTicketAttachment } from "@/lib/domain/attachments";
 import { ApiError, errorResponse } from "@/lib/http/api-error";
 
@@ -9,6 +10,7 @@ export async function POST(
   try {
     const session = await requirePermission("tickets:work");
     const { id } = await context.params;
+    await assertTicketVisible(session, id);
     const form = await request.formData();
     const file = form.get("file");
     const requestKey = form.get("requestKey");

@@ -29,4 +29,39 @@ describe("filtros de relatórios e exportação", () => {
       ),
     ).toThrow("data inicial");
   });
+
+  it("recusa período maior que 366 dias", () => {
+    expect(() =>
+      reportFilters(
+        new URLSearchParams({ from: "2024-01-01", to: "2026-01-01" }),
+      ),
+    ).toThrow("366 dias");
+  });
+
+  it("trata todos os usuários como filtro explícito sem restringir ao atual", () => {
+    const result = reportFilters(
+      new URLSearchParams({
+        from: "2026-09-01",
+        to: "2026-09-03",
+        userId: "all",
+      }),
+    );
+
+    expect(result.userId).toBe("");
+    expect(result.where).not.toHaveProperty("userId");
+  });
+
+  it("mantém o filtro quando um usuário específico é escolhido", () => {
+    const userId = "00000000-0000-4000-8000-000000000001";
+    const result = reportFilters(
+      new URLSearchParams({
+        from: "2026-09-01",
+        to: "2026-09-03",
+        userId,
+      }),
+    );
+
+    expect(result.userId).toBe(userId);
+    expect(result.where).toHaveProperty("userId", userId);
+  });
 });

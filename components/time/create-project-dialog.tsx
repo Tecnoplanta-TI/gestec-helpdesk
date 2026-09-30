@@ -15,14 +15,26 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { DateField } from "@/components/date-field";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Add01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { apiRequest } from "@/lib/http/client";
 import { currentLocalDateValue } from "@/lib/format";
 import type { TimeProject } from "@/components/time/project-combobox";
+import {
+  isRateioDraftValid,
+  ProjectRateioFields,
+  rateioPayload,
+  type RateioShareDraft,
+} from "@/components/time/project-rateio-fields";
 
 export function CreateProjectDialog({
   open,
@@ -39,7 +51,6 @@ export function CreateProjectDialog({
 }) {
   const [pending, startTransition] = useTransition();
   const [name, setName] = useState("");
-  const [code, setCode] = useState("");
   const [color, setColor] = useState("#10b981");
   const [availableToAll, setAvailableToAll] = useState(true);
   const [billableByDefault, setBillableByDefault] = useState(false);
@@ -48,23 +59,24 @@ export function CreateProjectDialog({
   const [hourlyRateEffectiveFrom, setHourlyRateEffectiveFrom] = useState(() =>
     currentLocalDateValue(),
   );
+  const [rateio, setRateio] = useState<RateioShareDraft[]>([]);
   const dirty =
     name.trim().length > 0 ||
-    code.trim().length > 0 ||
     color !== "#10b981" ||
     !availableToAll ||
     billableByDefault ||
-    !active;
+    !active ||
+    rateio.length > 0;
 
   function reset() {
     setName("");
-    setCode("");
     setColor("#10b981");
     setAvailableToAll(true);
     setBillableByDefault(false);
     setActive(true);
     setHourlyRate("");
     setHourlyRateEffectiveFrom(currentLocalDateValue());
+    setRateio([]);
   }
 
   function handleOpenChange(next: boolean) {
@@ -87,11 +99,11 @@ export function CreateProjectDialog({
             method: "POST",
             body: JSON.stringify({
               name,
-              code: code.toUpperCase(),
               color,
               availableToAll,
               billableByDefault,
               active,
+              allocations: rateioPayload(rateio),
               ...(hourlyRate.trim()
                 ? {
                     hourlyRate: Number(hourlyRate.replace(",", ".")),
@@ -131,25 +143,15 @@ export function CreateProjectDialog({
           <HugeiconsIcon icon={Add01Icon} />
         </DialogTrigger>
       ) : null}
-      <DialogContent>
-        <DialogHeader>
+      <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle>Criar projeto</DialogTitle>
           <DialogDescription>
-            Cadastre um projeto do programa Semear. Clientes são mantidos em um
-            cadastro separado.
+            Cadastre um projeto. Clientes são mantidos em um cadastro separado.
           </DialogDescription>
         </DialogHeader>
+        <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4 [scrollbar-width:thin]">
         <FieldGroup>
-          <Field>
-            <FieldLabel htmlFor="project-code">Código do projeto</FieldLabel>
-            <Input
-              id="project-code"
-              value={code}
-              onChange={(event) => setCode(event.target.value.toUpperCase())}
-              placeholder="PRO-0001"
-              aria-invalid={code.length > 0 && !/^PRO-\d+$/i.test(code)}
-            />
-          </Field>
           <Field>
             <FieldLabel htmlFor="project-name">Nome do projeto</FieldLabel>
             <Input
@@ -159,6 +161,9 @@ export function CreateProjectDialog({
               placeholder="Ex.: Evolução da plataforma"
               aria-invalid={name.length > 0 && name.trim().length < 2}
             />
+            <FieldDescription>
+              O código (PRO-0001, PRO-0002…) é gerado automaticamente.
+            </FieldDescription>
           </Field>
           <Field>
             <FieldLabel htmlFor="project-hourly-rate">
@@ -177,13 +182,10 @@ export function CreateProjectDialog({
               <FieldLabel htmlFor="project-rate-effective-from">
                 Válido a partir de
               </FieldLabel>
-              <Input
+              <DateField
                 id="project-rate-effective-from"
-                type="date"
                 value={hourlyRateEffectiveFrom}
-                onChange={(event) =>
-                  setHourlyRateEffectiveFrom(event.target.value)
-                }
+                onChange={setHourlyRateEffectiveFrom}
               />
             </Field>
           ) : null}
@@ -239,14 +241,16 @@ export function CreateProjectDialog({
               onCheckedChange={(value) => setActive(Boolean(value))}
             />
           </label>
+          <ProjectRateioFields shares={rateio} onChange={setRateio} />
         </FieldGroup>
-        <DialogFooter>
+        </div>
+        <DialogFooter className="border-t px-6 py-4">
           <DialogClose render={<Button variant="outline" disabled={pending} />}>
             Cancelar
           </DialogClose>
           <Button
             disabled={
-              pending || name.trim().length < 2 || !/^PRO-\d+$/i.test(code)
+              pending || name.trim().length < 2 || !isRateioDraftValid(rateio)
             }
             onClick={createProject}
           >

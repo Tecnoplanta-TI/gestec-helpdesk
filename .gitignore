@@ -21,6 +21,12 @@
 # production
 /build
 
+# local deployment bundles (generated standalone builds)
+/release/
+/release-*/
+/gestec-helpdesk-release.tar.gz
+/gestec-helpdesk-*-release.tar.gz
+
 # misc
 .DS_Store
 *.pem
@@ -41,3 +47,5 @@ pnpm-debug.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+codex-session-01a001e5-4aa7-7113-afb6-c98da3012298.md

@@ -1,4 +1,5 @@
 import { requirePermission } from "@/lib/auth/session";
+import { assertTicketVisible } from "@/lib/auth/ticket-access";
 import { queueZeevSync } from "@/lib/domain/tickets";
 import { commentSchema } from "@/lib/domain/schemas";
 import { ApiError, errorResponse, readJson } from "@/lib/http/api-error";
@@ -12,6 +13,7 @@ export async function POST(
   try {
     const session = await requirePermission("tickets:work");
     const { id } = await context.params;
+    await assertTicketVisible(session, id);
     const input = commentSchema.parse(await readJson(request));
     const result = await prisma.$transaction(async (tx) => {
       const ticket = await tx.ticket.findUnique({

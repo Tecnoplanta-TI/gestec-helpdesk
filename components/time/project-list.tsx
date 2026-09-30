@@ -2,10 +2,11 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
+import { DateField } from "@/components/date-field";
 import { CreateProjectDialog } from "@/components/time/create-project-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,12 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@/components/ui/empty";
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
+import {
+  Field,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+} from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import {
   Sheet,
@@ -42,6 +48,16 @@ import {
 } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
 import { Add01Icon, SearchIcon } from "@/lib/icons";
+import { formatRateioSummary } from "@/lib/format";
+import { Pencil, Trash2 } from "lucide-react";
+import {
+  isRateioDraftValid,
+  ProjectRateioFields,
+  rateioPayload,
+  sharesFromRateio,
+  type RateioShareDraft,
+  type RateioShareValue,
+} from "@/components/time/project-rateio-fields";
 
 export type ProjectListItem = {
   id: string;
@@ -56,6 +72,7 @@ export type ProjectListItem = {
   hourlyRateEffectiveFrom: string | Date | null;
   latestHourlyRateEffectiveFrom: string | Date | null;
   monthSeconds: number;
+  rateio: RateioShareValue[];
 };
 
 export function ProjectList({
@@ -72,7 +89,6 @@ export function ProjectList({
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [deleting, setDeleting] = useState<ProjectListItem | null>(null);
   const [form, setForm] = useState({
-    code: "",
     name: "",
     color: "#10b981",
     availableToAll: true,
@@ -81,20 +97,23 @@ export function ProjectList({
     hourlyRate: "",
     hourlyRateEffectiveFrom: currentLocalDateValue(),
   });
+  const [rateio, setRateio] = useState<RateioShareDraft[]>([]);
   const visibleProjects = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
     if (!normalized) return projects;
     return projects.filter(
       (project) =>
         project.name.toLocaleLowerCase("pt-BR").includes(normalized) ||
-        project.code?.toLocaleLowerCase("pt-BR").includes(normalized),
+        project.code?.toLocaleLowerCase("pt-BR").includes(normalized) ||
+        formatRateioSummary(project.rateio ?? [])
+          .toLocaleLowerCase("pt-BR")
+          .includes(normalized),
     );
   }, [projects, query]);
 
   function openEditor(project: ProjectListItem) {
     setEditing(project);
     setForm({
-      code: project.code ?? "",
       name: project.name,
       color: project.color ?? "#10b981",
       availableToAll: project.availableToAll,
@@ -103,6 +122,7 @@ export function ProjectList({
       hourlyRate: "",
       hourlyRateEffectiveFrom: currentLocalDateValue(),
     });
+    setRateio(sharesFromRateio(project.rateio));
   }
 
   function saveProject() {
@@ -114,13 +134,18 @@ export function ProjectList({
           {
             method: "PATCH",
             body: JSON.stringify({
-              ...form,
+              name: form.name.trim(),
+              color: form.color,
+              availableToAll: form.availableToAll,
+              billableByDefault: form.billableByDefault,
+              active: form.active,
+              allocations: rateioPayload(rateio),
               ...(form.hourlyRate.trim()
-                ? { hourlyRate: Number(form.hourlyRate.replace(",", ".")) }
-                : {
-                    hourlyRate: undefined,
-                    hourlyRateEffectiveFrom: undefined,
-                  }),
+                ? {
+                    hourlyRate: Number(form.hourlyRate.replace(",", ".")),
+                    hourlyRateEffectiveFrom: form.hourlyRateEffectiveFrom,
+                  }
+                : {}),
             }),
           },
         );
@@ -227,6 +252,11 @@ export function ProjectList({
                           {project.code}
                         </span>
                         <span>{project.name}</span>
+                        {project.rateio?.length ? (
+                          <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                            Rateio: {formatRateioSummary(project.rateio)}
+                          </span>
+                        ) : null}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatCurrencyFromCents(project.hourlyRateCents)}
@@ -246,20 +276,22 @@ export function ProjectList({
                       </TableCell>
                       {canManage ? (
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-1">
                             <Button
-                              variant="outline"
-                              size="sm"
+                              variant="ghost"
+                              size="icon"
+                              aria-label="Editar"
                               onClick={() => openEditor(project)}
                             >
-                              Editar
+                              <Pencil />
                             </Button>
                             <Button
                               variant="ghost"
-                              size="sm"
+                              size="icon"
+                              aria-label="Excluir"
                               onClick={() => setDeleting(project)}
                             >
-                              Excluir
+                              <Trash2 />
                             </Button>
                           </div>
                         </TableCell>
@@ -288,7 +320,7 @@ export function ProjectList({
           if (!open) setEditing(null);
         }}
       >
-        <SheetContent side="right" className="sm:max-w-md">
+        <SheetContent side="right" className="sm:max-w-lg">
           <SheetHeader>
             <SheetTitle>Editar projeto</SheetTitle>
             <SheetDescription>
@@ -299,21 +331,14 @@ export function ProjectList({
                 : " Nenhum valor-hora foi informado ainda."}
             </SheetDescription>
           </SheetHeader>
-          <div className="flex-1 overflow-y-auto px-6">
+          <div className="flex-1 overflow-y-auto px-6 [scrollbar-width:thin]">
             <FieldGroup>
               <Field>
-                <FieldLabel htmlFor="project-edit-code">Código</FieldLabel>
-                <Input
-                  id="project-edit-code"
-                  value={form.code}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      code: event.target.value.toUpperCase(),
-                    }))
-                  }
-                  placeholder="PRO-0001"
-                />
+                <FieldLabel>Código</FieldLabel>
+                <p className="text-sm font-medium">{editing?.code ?? "—"}</p>
+                <FieldDescription>
+                  O código do projeto é gerado automaticamente.
+                </FieldDescription>
               </Field>
               <Field>
                 <FieldLabel htmlFor="project-edit-name">Nome</FieldLabel>
@@ -350,14 +375,13 @@ export function ProjectList({
                   <FieldLabel htmlFor="project-edit-rate-effective-from">
                     Válido a partir de
                   </FieldLabel>
-                  <Input
+                  <DateField
                     id="project-edit-rate-effective-from"
-                    type="date"
                     value={form.hourlyRateEffectiveFrom}
-                    onChange={(event) =>
+                    onChange={(value) =>
                       setForm((current) => ({
                         ...current,
-                        hourlyRateEffectiveFrom: event.target.value,
+                        hourlyRateEffectiveFrom: value,
                       }))
                     }
                   />
@@ -429,6 +453,7 @@ export function ProjectList({
                   }
                 />
               </label>
+              <ProjectRateioFields shares={rateio} onChange={setRateio} />
             </FieldGroup>
           </div>
           <SheetFooter>
@@ -444,7 +469,7 @@ export function ProjectList({
               disabled={
                 pending ||
                 form.name.trim().length < 2 ||
-                !/^PRO-\d+$/i.test(form.code)
+                !isRateioDraftValid(rateio)
               }
             >
               {pending ? "Salvando…" : "Salvar"}

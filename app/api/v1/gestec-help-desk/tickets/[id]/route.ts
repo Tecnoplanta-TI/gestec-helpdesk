@@ -2,6 +2,7 @@ import { Prisma, TicketStatus } from "@prisma/client";
 
 import { hasPermission } from "@/lib/auth/permissions";
 import { requirePermission } from "@/lib/auth/session";
+import { assertTicketVisible, withTicketVisibility } from "@/lib/auth/ticket-access";
 import { normalizeRequestType } from "@/lib/domain/request-types";
 import { ticketClassificationFields } from "@/lib/domain/ticket-classification";
 import { canTransition } from "@/lib/domain/operations";
@@ -15,10 +16,10 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requirePermission("tickets:view");
+    const session = await requirePermission("tickets:view");
     const { id } = await context.params;
-    const ticket = await prisma.ticket.findUnique({
-      where: { id },
+    const ticket = await prisma.ticket.findFirst({
+      where: withTicketVisibility({ id }, session),
       include: ticketInclude,
     });
     if (!ticket)
@@ -36,6 +37,7 @@ export async function PATCH(
   try {
     const session = await requirePermission("tickets:work");
     const { id } = await context.params;
+    await assertTicketVisible(session, id);
     const input = ticketUpdateSchema.parse(await readJson(request));
     if (
       (input.status !== undefined || input.priority !== undefined) &&

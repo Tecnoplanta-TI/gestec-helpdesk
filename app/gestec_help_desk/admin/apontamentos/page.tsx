@@ -1,7 +1,7 @@
 import { addDays, format } from "date-fns";
 
+import { ApontamentosPeriodFilter } from "@/components/admin/apontamentos-period-filter";
 import { AdminTimeEntryManager } from "@/components/admin/time-entry-manager";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -9,9 +9,8 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { requirePagePermission } from "@/lib/auth/page-session";
-import { listProjectCatalog } from "@/lib/domain/projects";
+import { listProjectCatalog, toTimeProjects } from "@/lib/domain/projects";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
@@ -35,7 +34,7 @@ export default async function AdminTimeEntriesPage({
   const from = new Date(`${fromValue}T00:00:00`);
   const to = addDays(new Date(`${toValue}T00:00:00`), 1);
 
-  const [entries, users, projects] = await Promise.all([
+  const [entries, users, catalog, costCenters] = await Promise.all([
     prisma.timeEntry.findMany({
       where: { startedAt: { gte: from, lt: to } },
       include: {
@@ -53,7 +52,12 @@ export default async function AdminTimeEntriesPage({
       includePrivateManual: true,
       includeInactive: true,
     }),
+    prisma.costCenter.findMany({
+      select: { id: true, code: true, name: true },
+      orderBy: [{ code: "asc" }, { name: "asc" }],
+    }),
   ]);
+  const projects = toTimeProjects(costCenters, catalog);
 
   return (
     <div className="flex flex-col gap-6">
@@ -72,25 +76,12 @@ export default async function AdminTimeEntriesPage({
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <form className="flex flex-wrap items-end gap-3" method="get">
-            <label className="flex flex-col gap-1 text-sm">
-              De
-              <Input type="date" name="from" defaultValue={fromValue} />
-            </label>
-            <label className="flex flex-col gap-1 text-sm">
-              Até
-              <Input type="date" name="to" defaultValue={toValue} />
-            </label>
-            <Button type="submit">Filtrar</Button>
-          </form>
+          <ApontamentosPeriodFilter from={fromValue} to={toValue} />
           <AdminTimeEntryManager
             entries={JSON.parse(JSON.stringify(entries))}
             users={users}
             currentUserId={session.userId}
-            projects={projects.map((project) => ({
-              id: project.id,
-              name: project.name,
-            }))}
+            projects={projects}
           />
         </CardContent>
       </Card>
