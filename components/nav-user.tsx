@@ -1,5 +1,7 @@
 "use client"
 
+import { useEffect, useState } from "react"
+import { useTheme } from "next-themes"
 import {
   Avatar,
   AvatarFallback,
@@ -18,7 +20,13 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar"
 import type { UserRole } from "@/lib/client-enums"
-import { BellIcon, ChevronsUpDownIcon, LogOutIcon } from "lucide-react"
+import {
+  BellIcon,
+  ChevronsUpDownIcon,
+  LogOutIcon,
+  MoonIcon,
+  SunIcon,
+} from "lucide-react"
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -38,7 +46,14 @@ export function NavUser({
   }
 }) {
   const { isMobile } = useSidebar()
+  const { resolvedTheme, setTheme } = useTheme()
+  const [mounted, setMounted] = useState(false)
   const fallback = initials(user.name)
+  const dark = mounted && resolvedTheme === "dark"
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
   return (
     <SidebarMenu>
       <SidebarMenuItem>
@@ -70,6 +85,12 @@ export function NavUser({
             >
               <BellIcon />
               Notificações
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => setTheme(dark ? "light" : "dark")}
+            >
+              {dark ? <SunIcon /> : <MoonIcon />}
+              {dark ? "Tema claro" : "Tema escuro"}
             </DropdownMenuItem>
             <form action="/auth/sign-out" method="post" className="w-full">
               <DropdownMenuItem
