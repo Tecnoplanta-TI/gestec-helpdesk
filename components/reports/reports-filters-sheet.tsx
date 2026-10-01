@@ -1,4 +1,5 @@
 "use client";
+import { Filter } from "lucide-react";
 
 import { useState } from "react";
 import { format, parseISO } from "date-fns";
@@ -32,9 +33,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
-import { FilterIcon } from "@/lib/icons";
 import { displayPersonName } from "@/lib/format";
-import { HugeiconsIcon } from "@/components/icon";
 
 export type ReportFilters = {
   from: string;
@@ -137,7 +136,7 @@ export function ReportsFiltersSheet({
   return (
     <Sheet open={open} onOpenChange={openSheet}>
       <SheetTrigger render={<Button type="button" variant="outline" />}>
-        <HugeiconsIcon data-icon="inline-start" icon={FilterIcon} />
+        <Filter className="size-4" data-icon="inline-start" />
         Filtros
       </SheetTrigger>
       <SheetContent side="right" className="sm:max-w-md">

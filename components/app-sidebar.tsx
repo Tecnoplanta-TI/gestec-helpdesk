@@ -6,7 +6,6 @@ import {
   BarChart3Icon,
   CheckCircle2Icon,
   ClockIcon,
-  InboxIcon,
   KanbanIcon,
   MonitorIcon,
   Settings2Icon,
@@ -111,12 +110,6 @@ export function AppSidebar({
     navMain: [
       link("Tickets", "/gestec_help_desk/tickets", <TicketIcon />, "tickets:view"),
       link("Kanban", "/gestec_help_desk/kanban", <KanbanIcon />, "tickets:view"),
-      link(
-        "Minha Caixa",
-        "/gestec_help_desk/minha-caixa",
-        <InboxIcon />,
-        "notifications:view",
-      ),
       link(
         "Acompanhar",
         "/gestec_help_desk/solicitacoes",

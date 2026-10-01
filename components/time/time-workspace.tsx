@@ -1,21 +1,9 @@
 "use client";
+import { ArrowLeft, ArrowRight, CircleDollarSign, Clock, Download, EllipsisVertical, Info, Play, Plus, Square } from "lucide-react";
 
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { addDays, format } from "date-fns";
-import {
-  Add01Icon,
-  ArrowLeft01Icon,
-  ArrowRight01Icon,
-  Clock01Icon,
-  DollarCircleIcon,
-  Download01Icon,
-  InformationCircleIcon,
-  MoreVerticalIcon,
-  PlayIcon,
-  StopIcon,
-} from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -121,10 +109,7 @@ function BillableButton({
           />
         }
       >
-        <HugeiconsIcon
-          icon={DollarCircleIcon}
-          className={billable ? "fill-primary-foreground/20" : ""}
-        />
+        <CircleDollarSign className={billable ? "fill-primary-foreground/20" : ""} />
       </TooltipTrigger>
       <TooltipContent>
         {billable ? "Faturável" : "Não faturável"}
@@ -614,7 +599,7 @@ export function TimeWorkspace({
           />
           {exportHref ? (
             <Button variant="outline" render={<a href={exportHref} download />}>
-              <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />{" "}
+              <Download className="size-4" data-icon="inline-start" />{" "}
               Exportar
             </Button>
           ) : null}
@@ -623,7 +608,7 @@ export function TimeWorkspace({
 
       {visibleTimer ? (
         <Alert className="border-primary/30 bg-primary/5">
-          <HugeiconsIcon icon={InformationCircleIcon} />
+          <Info className="size-4" />
           <AlertTitle>
             {timerSyncing ? "Sincronizando timer" : "Timer em execução"}
           </AlertTitle>
@@ -706,7 +691,7 @@ export function TimeWorkspace({
               disabled={pending || !canWrite}
               onClick={stop}
             >
-              <HugeiconsIcon data-icon="inline-start" icon={StopIcon} /> Parar
+              <Square className="size-4" data-icon="inline-start" /> Parar
             </Button>
           ) : mode === "timer" ? (
             <Button
@@ -719,7 +704,7 @@ export function TimeWorkspace({
               }
               onClick={start}
             >
-              <HugeiconsIcon data-icon="inline-start" icon={PlayIcon} /> Iniciar
+              <Play className="size-4" data-icon="inline-start" /> Iniciar
             </Button>
           ) : (
             <Button
@@ -728,7 +713,7 @@ export function TimeWorkspace({
               }
               onClick={addManual}
             >
-              <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />{" "}
+              <Plus className="size-4" data-icon="inline-start" />{" "}
               Adicionar
             </Button>
           )}
@@ -754,7 +739,7 @@ export function TimeWorkspace({
                   />
                 }
               >
-                <HugeiconsIcon icon={Clock01Icon} />
+                <Clock className="size-4" />
               </TooltipTrigger>
               <TooltipContent>
                 {mode === "timer" ? "Lançamento manual" : "Usar timer"}
@@ -766,7 +751,7 @@ export function TimeWorkspace({
                   <Button variant="ghost" size="icon" aria-label="Mais ações" />
                 }
               >
-                <HugeiconsIcon icon={MoreVerticalIcon} />
+                <EllipsisVertical className="size-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onClick={() => router.refresh()}>
@@ -789,7 +774,7 @@ export function TimeWorkspace({
             <div>
               <CardTitle className="capitalize">{weekLabel}</CardTitle>
               <CardDescription>
-                Apontamentos do maior para o menor em cada dia.
+                Apontamentos do horário mais recente para o mais antigo.
               </CardDescription>
             </div>
             <div className="flex items-center gap-2">
@@ -800,7 +785,7 @@ export function TimeWorkspace({
                 aria-label="Semana anterior"
                 onClick={() => shiftWeek(-7)}
               >
-                <HugeiconsIcon icon={ArrowLeft01Icon} />
+                <ArrowLeft className="size-4" />
               </Button>
               <Button
                 type="button"
@@ -818,7 +803,7 @@ export function TimeWorkspace({
                 aria-label="Próxima semana"
                 onClick={() => shiftWeek(7)}
               >
-                <HugeiconsIcon icon={ArrowRight01Icon} />
+                <ArrowRight className="size-4" />
               </Button>
             </div>
           </div>
@@ -895,14 +880,11 @@ export function TimeWorkspace({
                             />
                           }
                         >
-                          <HugeiconsIcon
-                            icon={DollarCircleIcon}
-                            className={
+                          <CircleDollarSign className={
                               entry.billable
                                 ? "fill-foreground/15"
                                 : "opacity-40"
-                            }
-                          />
+                            } />
                         </TooltipTrigger>
                         <TooltipContent>
                           {entry.billable ? "Faturável" : "Não faturável"}
@@ -924,7 +906,7 @@ export function TimeWorkspace({
                             />
                           }
                         >
-                          <HugeiconsIcon icon={MoreVerticalIcon} />
+                          <EllipsisVertical className="size-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           {canWrite ? (

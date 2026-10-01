@@ -1,4 +1,5 @@
 "use client";
+import { Filter } from "lucide-react";
 
 import { useState } from "react";
 
@@ -26,9 +27,7 @@ import {
   ProjectCombobox,
   type TimeProject,
 } from "@/components/time/project-combobox";
-import { FilterIcon } from "@/lib/icons";
 import type { TimeBillableFilter } from "@/lib/domain/time-query";
-import { HugeiconsIcon } from "@/components/icon";
 
 export type JornadaFilters = {
   from: string;
@@ -76,7 +75,7 @@ export function JornadaFiltersSheet({
   return (
     <Sheet open={open} onOpenChange={openSheet}>
       <SheetTrigger render={<Button type="button" variant="outline" />}>
-        <HugeiconsIcon data-icon="inline-start" icon={FilterIcon} />
+        <Filter className="size-4" data-icon="inline-start" />
         Filtros
       </SheetTrigger>
       <SheetContent side="right" className="sm:max-w-md">

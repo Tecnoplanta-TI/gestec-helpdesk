@@ -56,9 +56,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Pencil, Trash2 } from "lucide-react";
-import { Add01Icon, MoreVerticalIcon } from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
+import { EllipsisVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import {
   formatDateTime,
   formatHoursMinutes,
@@ -499,7 +497,7 @@ export function AdminTimeEntryManager({
           ) : null}
         </div>
         <Button onClick={() => openCreate()} disabled={projects.length === 0}>
-          <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
+          <Plus className="size-4" data-icon="inline-start" />
           Novo apontamento
         </Button>
       </div>
@@ -629,7 +627,7 @@ export function AdminTimeEntryManager({
                             />
                           }
                         >
-                          <HugeiconsIcon icon={MoreVerticalIcon} />
+                          <EllipsisVertical className="size-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent
                           align="end"

@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
@@ -47,9 +46,8 @@ import {
   formatHoursMinutes,
 } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
-import { Add01Icon, SearchIcon } from "@/lib/icons";
 import { formatRateioSummary } from "@/lib/format";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 import {
   isRateioDraftValid,
   ProjectRateioFields,
@@ -198,7 +196,7 @@ export function ProjectList({
         {canManage ? (
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => setCreateProjectOpen(true)}>
-              <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
+              <Plus className="size-4" data-icon="inline-start" />
               Criar projeto
             </Button>
           </div>
@@ -217,10 +215,7 @@ export function ProjectList({
       ) : (
         <div className="flex flex-col gap-3">
           <div className="relative max-w-md">
-            <HugeiconsIcon
-              icon={SearchIcon}
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-            />
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}

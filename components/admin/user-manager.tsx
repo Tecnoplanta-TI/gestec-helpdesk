@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { UserRole } from "@/lib/client-enums";
-import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -42,11 +41,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Add01Icon } from "@/lib/icons";
 import { userRoleLabels } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 export type AdminUser = {
   id: string;
@@ -184,7 +182,7 @@ export function AdminUserManager({
           </p>
         </div>
         <Button onClick={startCreate}>
-          <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} /> Novo
+          <Plus className="size-4" data-icon="inline-start" /> Novo
           usuário
         </Button>
       </div>

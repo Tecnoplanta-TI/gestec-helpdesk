@@ -74,7 +74,7 @@ describe("filtros e totais de Meu Tempo", () => {
     ).toBe("cost-center:cc-1");
   });
 
-  it("ordena apontamentos do dia do maior para o menor", () => {
+  it("ordena apontamentos do horário mais recente para o mais antigo", () => {
     const grouped = groupTimeEntriesByDay([
       {
         startedAt: "2026-09-03T10:00:00",
@@ -89,8 +89,11 @@ describe("filtros e totais de Meu Tempo", () => {
         durationSeconds: 1800,
       },
     ]);
-    expect(grouped[0]?.[1][0]?.durationSeconds).toBe(3600);
-    expect(grouped[0]?.[1][1]?.durationSeconds).toBe(600);
+    expect(grouped[0]?.[1].map((entry) => entry.startedAt)).toEqual([
+      "2026-09-03T14:00:00",
+      "2026-09-03T10:00:00",
+    ]);
+    expect(grouped[1]?.[1][0]?.startedAt).toBe("2026-09-02T09:00:00");
   });
 });
 

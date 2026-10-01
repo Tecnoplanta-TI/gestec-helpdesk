@@ -1,4 +1,5 @@
 "use client";
+import { Plus } from "lucide-react";
 
 import { useState, useTransition } from "react";
 import { toast } from "sonner";
@@ -24,8 +25,6 @@ import {
 } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { Add01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
 import { apiRequest } from "@/lib/http/client";
 import { currentLocalDateValue } from "@/lib/format";
 import type { TimeProject } from "@/components/time/project-combobox";
@@ -140,7 +139,7 @@ export function CreateProjectDialog({
             <Button variant="outline" size="icon" aria-label="Criar projeto" />
           }
         >
-          <HugeiconsIcon icon={Add01Icon} />
+          <Plus className="size-4" />
         </DialogTrigger>
       ) : null}
       <DialogContent className="flex max-h-[min(90vh,48rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">

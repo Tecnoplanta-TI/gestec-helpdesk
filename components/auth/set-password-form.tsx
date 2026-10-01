@@ -1,8 +1,7 @@
 "use client";
+import { CircleCheck } from "lucide-react";
 
 import { useState, type FormEvent } from "react";
-import { HugeiconsIcon } from "@/components/icon";
-import { CheckmarkCircle02Icon } from "@/lib/icons";
 
 import { newPasswordValidationError } from "@/lib/auth/password-policy";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
@@ -78,7 +77,7 @@ export function SetPasswordForm({
         </Field>
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
         <Button className="w-full sm:w-auto" disabled={submitting} size="lg" type="submit">
-          <HugeiconsIcon icon={CheckmarkCircle02Icon} />
+          <CircleCheck className="size-4" />
           {submitting ? "Salvando senha..." : "Criar senha e entrar"}
         </Button>
         <FieldDescription className="text-center">

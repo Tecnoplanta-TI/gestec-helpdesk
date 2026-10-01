@@ -2,7 +2,6 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { HugeiconsIcon } from "@/components/icon";
 import { AssetStatus } from "@/lib/client-enums";
 import { toast } from "sonner";
 
@@ -42,10 +41,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
-import { Add01Icon, SearchIcon } from "@/lib/icons";
 import { apiRequest } from "@/lib/http/client";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Search, Trash2 } from "lucide-react";
 
 const statusLabels: Record<AssetStatus, string> = {
   IN_STOCK: "Em estoque",
@@ -199,7 +197,7 @@ export function AssetManager({
         </div>
         {canManage && (
           <Button onClick={startCreate}>
-            <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />{" "}
+            <Plus className="size-4" data-icon="inline-start" />{" "}
             Cadastrar ativo
           </Button>
         )}
@@ -214,10 +212,7 @@ export function AssetManager({
             </CardDescription>
           </div>
           <div className="relative max-w-md">
-            <HugeiconsIcon
-              icon={SearchIcon}
-              className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
-            />
+            <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
               onChange={(event) => setQuery(event.target.value)}

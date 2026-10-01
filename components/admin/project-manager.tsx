@@ -40,9 +40,7 @@ import {
 } from "@/components/ui/empty";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
 import { CreateProjectDialog } from "@/components/time/create-project-dialog";
-import { Add01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { apiRequest } from "@/lib/http/client";
 import {
   currentLocalDateValue,
@@ -189,7 +187,7 @@ export function AdminProjectManager({
         </div>
         <div className="flex flex-wrap gap-2">
           <Button onClick={() => setCreateProjectOpen(true)}>
-            <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
+            <Plus className="size-4" data-icon="inline-start" />
             Criar projeto
           </Button>
         </div>
