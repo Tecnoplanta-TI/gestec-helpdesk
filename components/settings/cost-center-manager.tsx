@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { HugeiconsIcon } from "@/components/icon";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +33,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Add01Icon } from "@/lib/icons";
 import { apiRequest } from "@/lib/http/client";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 
 type CostCenter = {
   id: string;
@@ -162,7 +160,7 @@ export function CostCenterManager({
           </p>
         </div>
         <Button onClick={startCreate}>
-          <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} /> Novo
+          <Plus className="size-4" data-icon="inline-start" /> Novo
           cliente
         </Button>
       </div>

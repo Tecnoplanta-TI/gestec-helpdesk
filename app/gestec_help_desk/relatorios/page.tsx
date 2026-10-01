@@ -1,5 +1,4 @@
-import { Download01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
+import { Download } from "lucide-react";
 import { format } from "date-fns";
 
 import { Button } from "@/components/ui/button";
@@ -276,6 +275,23 @@ export default async function ReportsPage({
         seconds,
       };
     })
+    .reduce<
+      Array<{
+        key: string;
+        name: string;
+        type: string;
+        rateio: string;
+        seconds: number;
+      }>
+    >((rows, row) => {
+      const current = rows.find((item) => item.key === row.key);
+      if (current) {
+        current.seconds += row.seconds;
+        return rows;
+      }
+      rows.push(row);
+      return rows;
+    }, [])
     .sort((left, right) => right.seconds - left.seconds);
 
   const allocatedTotals = new Map<string, { name: string; seconds: number }>();
@@ -359,7 +375,7 @@ export default async function ReportsPage({
               />
             }
           >
-            <HugeiconsIcon data-icon="inline-start" icon={Download01Icon} />
+            <Download className="size-4" data-icon="inline-start" />
             Exportar (.xlsx)
           </Button>
         </div>

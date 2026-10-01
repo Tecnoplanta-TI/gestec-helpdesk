@@ -1,4 +1,5 @@
 "use client";
+import { ChevronsUpDown } from "lucide-react";
 
 import { useMemo, useState } from "react";
 
@@ -15,8 +16,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { UnfoldMoreIcon } from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
 import { rankProjectQuery } from "@/lib/domain/project-search";
 import { cn } from "@/lib/utils";
 
@@ -139,11 +138,8 @@ export function ProjectCombobox({
         <span className={cn("min-w-0 truncate", !selected && "text-muted-foreground")}>
           {selected ? projectLabel(selected) : placeholder}
         </span>
-        <HugeiconsIcon
-          icon={UnfoldMoreIcon}
-          strokeWidth={2}
-          className="pointer-events-none size-4 shrink-0 text-muted-foreground"
-        />
+        <ChevronsUpDown strokeWidth={2}
+          className="pointer-events-none size-4 shrink-0 text-muted-foreground" />
       </PopoverTrigger>
       <PopoverContent
         align="start"

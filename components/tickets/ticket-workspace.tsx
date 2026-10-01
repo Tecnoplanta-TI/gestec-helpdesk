@@ -1,9 +1,8 @@
 "use client";
+import { ArrowLeft, Play, Square } from "lucide-react";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowLeft01Icon, PlayIcon, StopIcon } from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
 import Link from "next/link";
 import { toast } from "sonner";
 import { ParticipantRole, TicketAssetRelation } from "@/lib/client-enums";
@@ -290,7 +289,7 @@ export function TicketWorkspace({
             render={<Link href="/gestec_help_desk/tickets" prefetch={false} />}
             aria-label="Voltar para tickets"
           >
-            <HugeiconsIcon icon={ArrowLeft01Icon} />
+            <ArrowLeft className="size-4" />
           </Button>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
@@ -340,7 +339,7 @@ export function TicketWorkspace({
               )
             }
           >
-            <HugeiconsIcon data-icon="inline-start" icon={StopIcon} /> Parar
+            <Square className="size-4" data-icon="inline-start" /> Parar
             atendimento
           </Button>
         ) : canWorkTicket &&
@@ -368,12 +367,12 @@ export function TicketWorkspace({
               )
             }
           >
-            <HugeiconsIcon data-icon="inline-start" icon={PlayIcon} /> Retomar
+            <Play className="size-4" data-icon="inline-start" /> Retomar
             atendimento
           </Button>
         ) : ticket.status === "IN_PROGRESS" ? (
           <Button disabled={pending} onClick={() => setContactDialogOpen(true)}>
-            <HugeiconsIcon data-icon="inline-start" icon={PlayIcon} /> Registrar
+            <Play className="size-4" data-icon="inline-start" /> Registrar
             contato inicial
           </Button>
         ) : null}

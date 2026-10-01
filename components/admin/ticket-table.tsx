@@ -1,9 +1,9 @@
 "use client";
+import { Plus } from "lucide-react";
 
 import { useState } from "react";
 import Link from "next/link";
 import { TicketPriority, TicketStatus } from "@/lib/client-enums";
-import { HugeiconsIcon } from "@/components/icon";
 
 import { AdminTicketCreateDialog } from "@/components/admin/ticket-create-dialog";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +24,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Add01Icon } from "@/lib/icons";
 import {
   formatDateTime,
   ticketPriorityLabels,
@@ -81,7 +80,7 @@ export function AdminTicketTable({
     <div className="flex flex-col gap-4">
       <div className="flex justify-end">
         <Button onClick={() => setCreateOpen(true)}>
-          <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
+          <Plus className="size-4" data-icon="inline-start" />
           Novo ticket
         </Button>
       </div>

@@ -16,7 +16,8 @@ import {
 const labels: Record<string, string> = {
   tickets: "Tickets",
   kanban: "Kanban",
-  "minha-caixa": "Minha Caixa",
+  notificacoes: "Notificações",
+  "minha-caixa": "Notificações",
   solicitacoes: "Acompanhar",
   jornada: "Jornada",
   ativos: "Ativos de TI",

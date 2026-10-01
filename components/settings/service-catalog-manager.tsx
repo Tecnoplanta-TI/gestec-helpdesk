@@ -2,11 +2,9 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Add01Icon } from "@/lib/icons";
 import { apiRequest } from "@/lib/http/client";
 import { ConfirmDeleteDialog } from "@/components/catalog/confirm-delete-dialog";
-import { HugeiconsIcon } from "@/components/icon";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -226,7 +224,7 @@ export function ServiceCatalogManager({
         <div className="flex gap-2">
           <Dialog open={groupOpen} onOpenChange={setGroupOpen}>
             <DialogTrigger render={<Button variant="outline" />}>
-              <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} /> Grupo
+              <Plus className="size-4" data-icon="inline-start" /> Grupo
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
@@ -289,7 +287,7 @@ export function ServiceCatalogManager({
           </Dialog>
           <Dialog open={serviceOpen} onOpenChange={setServiceOpen}>
             <DialogTrigger render={<Button />}>
-              <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />{" "}
+              <Plus className="size-4" data-icon="inline-start" />{" "}
               Serviço
             </DialogTrigger>
             <DialogContent>

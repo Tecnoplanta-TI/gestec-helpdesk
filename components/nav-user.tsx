@@ -1,6 +1,5 @@
 "use client"
 
-import Link from "next/link"
 import {
   Avatar,
   AvatarFallback,
@@ -9,10 +8,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import {
@@ -21,14 +17,8 @@ import {
   SidebarMenuItem,
   useSidebar,
 } from "@/components/ui/sidebar"
-import { hasPermission } from "@/lib/auth/permissions"
 import type { UserRole } from "@/lib/client-enums"
-import {
-  BellIcon,
-  ChevronsUpDownIcon,
-  LogOutIcon,
-  Settings2Icon,
-} from "lucide-react"
+import { BellIcon, ChevronsUpDownIcon, LogOutIcon } from "lucide-react"
 
 function initials(name: string) {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -74,38 +64,13 @@ export function NavUser({
             align="end"
             sideOffset={4}
           >
-            <DropdownMenuGroup>
-              <DropdownMenuLabel className="p-0 font-normal">
-                <div className="flex items-center gap-2 px-1 py-1.5 text-left text-sm">
-                  <Avatar>
-                    <AvatarImage src={user.avatar} alt={user.name} />
-                    <AvatarFallback>{fallback}</AvatarFallback>
-                  </Avatar>
-                  <div className="grid flex-1 text-left text-sm leading-tight">
-                    <span className="truncate font-medium">{user.name}</span>
-                    <span className="truncate text-xs">{user.email}</span>
-                  </div>
-                </div>
-              </DropdownMenuLabel>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuGroup>
-              <DropdownMenuItem
-                render={<Link href="/gestec_help_desk/minha-caixa" />}
-              >
-                <BellIcon />
-                Notificações
-              </DropdownMenuItem>
-              {hasPermission(user.role, "admin:manage") ? (
-                <DropdownMenuItem
-                  render={<Link href="/gestec_help_desk/admin" />}
-                >
-                  <Settings2Icon />
-                  Administração
-                </DropdownMenuItem>
-              ) : null}
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              nativeButton={false}
+              render={<a href="/gestec_help_desk/notificacoes" />}
+            >
+              <BellIcon />
+              Notificações
+            </DropdownMenuItem>
             <form action="/auth/sign-out" method="post" className="w-full">
               <DropdownMenuItem
                 className="w-full"

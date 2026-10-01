@@ -13,7 +13,6 @@ import {
   Wrench,
 } from "lucide-react";
 
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
   Card,
   CardDescription,
@@ -103,14 +102,6 @@ export default function AdminHubPage() {
           continua com as regras de atendimento.
         </p>
       </div>
-      <Alert>
-        <AlertTitle>Identidade vem do Gestec</AlertTitle>
-        <AlertDescription>
-          Nome, e-mail e perfil do usuário logado são sincronizados a cada
-          requisição. Edições locais de outros usuários servem para correção e
-          ambiente de desenvolvimento; o Gestec permanece a origem da sessão.
-        </AlertDescription>
-      </Alert>
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {sections.map((section) => {
           const Icon = section.icon;

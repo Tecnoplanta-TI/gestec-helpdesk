@@ -1,4 +1,5 @@
 "use client";
+import { ArrowLeft } from "lucide-react";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -27,8 +28,6 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
 import {
   kanbanColumns,
   normalizeRequestType,
@@ -304,7 +303,7 @@ export function AdminTicketForm({
               <Link href="/gestec_help_desk/admin/tickets" prefetch={false} />
             }
           >
-            <HugeiconsIcon data-icon="inline-start" icon={ArrowLeft01Icon} />
+            <ArrowLeft className="size-4" data-icon="inline-start" />
             Voltar
           </Button>
           <h1 className="mt-2 text-2xl font-semibold tracking-tight">

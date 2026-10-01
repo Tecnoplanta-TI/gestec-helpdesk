@@ -13,6 +13,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty";
 import { Input } from "@/components/ui/input";
+import { canOpenNotificationHref } from "@/lib/features/jornada-only";
 import { formatDateTime } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
 
@@ -43,6 +44,7 @@ export function NotificationCenter({
   const [unreadOnly, setUnreadOnly] = useState(false);
   const [query, setQuery] = useState("");
   const [pending, startTransition] = useTransition();
+  const [openId, setOpenId] = useState<string | null>(null);
   const visibleItems = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase("pt-BR");
     return items.filter(
@@ -105,7 +107,7 @@ export function NotificationCenter({
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Minha Caixa</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Notificações</h1>
           <p className="text-sm text-muted-foreground">
             Notificações e avisos direcionados a você.
           </p>
@@ -143,10 +145,19 @@ export function NotificationCenter({
               key={item.id}
               className="flex flex-wrap items-start justify-between gap-4 p-4"
             >
-              <div className="min-w-0 flex-1">
+              <button
+                type="button"
+                className="min-w-0 flex-1 text-left"
+                onClick={() => {
+                  setOpenId((current) =>
+                    current === item.id ? null : item.id,
+                  );
+                  if (!item.readAt) markRead(item.id);
+                }}
+              >
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <h2
-                    className={`min-w-0 flex-1 truncate font-medium ${item.readAt ? "text-muted-foreground" : ""}`}
+                    className={`min-w-0 flex-1 font-medium ${openId === item.id ? "" : "truncate"} ${item.readAt ? "text-muted-foreground" : ""}`}
                     title={item.title}
                   >
                     {item.title}
@@ -163,7 +174,7 @@ export function NotificationCenter({
                   {!item.readAt ? <Badge>Nova</Badge> : null}
                 </div>
                 <p
-                  className="mt-1 truncate text-sm text-muted-foreground"
+                  className={`mt-1 text-sm text-muted-foreground ${openId === item.id ? "whitespace-pre-wrap" : "truncate"}`}
                   title={item.description}
                 >
                   {item.description}
@@ -174,9 +185,9 @@ export function NotificationCenter({
                 >
                   {item.source} · {formatDateTime(item.createdAt)}
                 </p>
-              </div>
+              </button>
               <div className="flex shrink-0 gap-2">
-                {item.href ? (
+                {item.href && canOpenNotificationHref(item.href) ? (
                   <Button
                     size="sm"
                     variant="outline"

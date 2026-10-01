@@ -1,4 +1,5 @@
 "use client";
+import { Plus, X } from "lucide-react";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -19,8 +20,6 @@ import {
 } from "@/lib/format";
 import { apiRequest } from "@/lib/http/client";
 import { appendRateioShare, type RateioShareDraft } from "@/lib/domain/rateio-draft";
-import { Add01Icon, Cancel01Icon } from "@/lib/icons";
-import { HugeiconsIcon } from "@/components/icon";
 
 export type { RateioShareDraft } from "@/lib/domain/rateio-draft";
 export { appendRateioShare } from "@/lib/domain/rateio-draft";
@@ -222,7 +221,7 @@ export function ProjectRateioFields({
                       )
                     }
                   >
-                    <HugeiconsIcon icon={Cancel01Icon} />
+                    <X className="size-4" />
                   </Button>
                 </div>
               );
@@ -246,7 +245,7 @@ export function ProjectRateioFields({
           </div>
         ) : null}
         <Button type="button" variant="outline" size="sm" onClick={addShare}>
-          <HugeiconsIcon data-icon="inline-start" icon={Add01Icon} />
+          <Plus className="size-4" data-icon="inline-start" />
           Adicionar centro de custo
         </Button>
       </div>

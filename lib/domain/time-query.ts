@@ -157,17 +157,20 @@ export function groupTimeEntriesByDay<
     groups.set(key, [...(groups.get(key) ?? []), entry]);
   }
 
-  return Array.from(groups.entries()).map(([day, dayEntries]) => [
-    day,
-    [...dayEntries].sort((left, right) => {
-      if (right.durationSeconds !== left.durationSeconds) {
-        return right.durationSeconds - left.durationSeconds;
-      }
-      return (
-        new Date(right.startedAt).getTime() - new Date(left.startedAt).getTime()
+  return Array.from(groups.entries())
+    .map(([day, dayEntries]) => {
+      const chronological = [...dayEntries].sort(
+        (left, right) =>
+          new Date(right.startedAt).getTime() -
+          new Date(left.startedAt).getTime(),
       );
-    }),
-  ]) as Array<[string, T[]]>;
+      return [day, chronological] as [string, T[]];
+    })
+    .sort(
+      (left, right) =>
+        new Date(right[1][0].startedAt).getTime() -
+        new Date(left[1][0].startedAt).getTime(),
+    );
 }
 
 export function todayBounds(now = new Date()) {

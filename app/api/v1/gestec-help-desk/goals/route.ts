@@ -66,7 +66,6 @@ export async function POST(request: Request) {
               priority: "NORMAL",
               resourceType: "TimeGoal",
               resourceId: created.id,
-              href: "/gestec_help_desk/jornada",
             },
             tx,
           ),

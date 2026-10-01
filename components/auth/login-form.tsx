@@ -1,8 +1,7 @@
 "use client";
+import { LogIn } from "lucide-react";
 
 import { useState, type FormEvent } from "react";
-import { HugeiconsIcon } from "@/components/icon";
-import { Login02Icon } from "@/lib/icons";
 
 import { Button } from "@/components/ui/button";
 import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
@@ -51,7 +50,7 @@ export function LoginForm() {
         </Field>
         {error ? <p className="text-sm text-destructive" role="alert">{error}</p> : null}
         <Button className="w-full sm:w-auto" size="lg" disabled={submitting} type="submit">
-          <HugeiconsIcon icon={Login02Icon} />
+          <LogIn className="size-4" />
           {submitting ? "Entrando..." : "Entrar"}
         </Button>
         <Link className="text-center text-sm text-primary underline-offset-4 hover:underline" href="/recuperar-senha">
